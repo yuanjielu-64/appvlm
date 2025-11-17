@@ -1,0 +1,1 @@
+scp -r jackal-final.sif ylu22@hopper.orc.gmu.edu:/containers/dgx/UserContainers/ylu22/

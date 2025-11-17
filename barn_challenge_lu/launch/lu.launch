@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<launch>
+
+  <arg name="programs" default="RunMP" />
+  <arg name="planner" default="DDP" />
+
+<!--   <node pkg="tf" type="static_transform_publisher" name="hokuyo2hokuyo_inv" args="0 0 0 0 0 3.14159  rear_mount hokuyo_inv 10" /> -->
+
+<!--   <node name="urg_node" pkg="urg_node" type="urg_node" output="screen"> -->
+<!--     <param name="ip_address" value="192.168.131.21"/> -->
+<!--     <param name="serial_port" value=""/> -->
+<!--     <param name="serial_baud" value="115200"/> -->
+<!--     <param name="frame_id" value="hokuyo_inv"/> -->
+<!--     <param name="calibrate_time" value="true"/> -->
+<!--     <param name="publish_intensity" value="false"/> -->
+<!--     <param name="publish_multiecho" value="false"/> -->
+<!--     <param name="angle_min" value="-1.5707963"/> -->
+<!--     <param name="angle_max" value="1.5707963"/> -->
+<!--      -->
+<!--     <remap from="scan" to="front/scan" /> -->
+<!--   </node> -->
+ 
+  <group if="$(eval planner != 'None')">
+    <node pkg="barn_challenge_lu" type="Runner" name="Runner" output="screen"
+      args="$(arg programs) $(find barn_challenge_lu)/data/ParamsForJackalGlobal.txt UseMP $(arg planner)"/>
+  </group>
+
+</launch>

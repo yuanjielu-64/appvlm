@@ -1,0 +1,77 @@
+Bootstrap: docker
+From: ros:noetic
+
+%setup
+    mkdir -p ${APPTAINER_ROOTFS}/jackal_ws/src
+
+%post -c /bin/bash
+    # Update packages and install all dependencies
+    apt update && apt install -y \
+        python3-pip \
+        git \
+        libprotobuf-dev \
+        protobuf-compiler \
+        libprotobuf-lite17 \
+        libprotoc17 \
+        pkg-config \
+        cmake \
+        build-essential \
+        gazebo11 \
+        libgazebo11-dev \
+        gazebo11-plugin-base \
+        ros-noetic-gazebo-ros \
+        ros-noetic-gazebo-ros-pkgs \
+        ros-noetic-gazebo-ros-control \
+        ros-noetic-tf2 \
+        ros-noetic-teb-local-planner \
+        ros-noetic-tf2-ros \
+        ros-noetic-tf2-geometry-msgs \
+        ros-noetic-tf2-msgs \
+        ros-noetic-tf2-eigen \
+        ros-noetic-tf2-kdl \
+        ros-noetic-tf2-sensor-msgs \
+        ros-noetic-nmea-msgs \
+        ros-noetic-roslint \
+        ros-noetic-rosserial-server \
+        ros-noetic-twist-mux \
+        ros-noetic-hector-gazebo-plugins \
+        ros-noetic-xacro \
+        ros-noetic-rosdoc-lite \
+        ros-noetic-teleop-twist-joy \
+        ros-noetic-costmap-2d \
+        ros-noetic-rviz \
+        ros-noetic-robot-upstart \
+        ros-noetic-jackal-simulator \
+        ros-noetic-jackal-desktop \
+        ros-noetic-jackal-navigation \
+        ros-noetic-rosserial-python \
+        ros-noetic-nmea-navsat-driver \
+        && apt clean
+
+    # Upgrade pip
+    pip3 install --upgrade pip
+
+    # Clone repository
+    cd /jackal_ws/src
+    git clone https://github.com/yuanjielu-64/applr .
+
+    # Install Python dependencies
+    cd /jackal_ws/src/ros_jackal
+    pip3 install -r requirements.txt
+    pip3 install scipy gymnasium psutil zipp pyquaternion
+
+    # Set up ROS workspace
+    cd /jackal_ws
+    source /opt/ros/noetic/setup.bash
+    catkin_make
+
+%environment
+    export ROS_WORKSPACE=/jackal_ws
+    export PYTHONPATH=/opt/ros/noetic/lib/python3/dist-packages:${PYTHONPATH}
+
+%runscript
+    #!/bin/bash
+    source /opt/ros/noetic/setup.bash
+    source /jackal_ws/devel/setup.bash
+    cd /jackal_ws/src
+    exec "$@"
