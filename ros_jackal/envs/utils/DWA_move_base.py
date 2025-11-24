@@ -69,6 +69,7 @@ class Robot_config():
         self.bad_vel = 0
         self.vel_counter = 0
         self.qt = (0, 0, 0, 0)
+        self.vx_hist = []
 
     def get_robot_status(self, msg):
         q1 = msg.pose.pose.orientation.x
@@ -80,6 +81,13 @@ class Robot_config():
         self.Z = msg.pose.pose.position.z
         self.PSI = np.arctan2(2 * (q0 * q3 + q1 * q2), (1 - 2 * (q2 ** 2 + q3 ** 2)))
         self.qt = (q1, q2, q3, q0)
+
+        current_time = rospy.Time.now().to_sec()
+        self.vx = msg.twist.twist.linear.x
+
+        self.vx_hist.append((current_time, self.vx))
+        self.vx_hist = [(t, v) for t, v in self.vx_hist if current_time - t < 5.0]
+
 
     def get_global_path(self, msg):
         gp = []
@@ -157,7 +165,10 @@ class DWA_move_base():
 
         self.laser_scan = None
 
-    def set_navi_param(self, param_name, param, flag):
+        self.backward_count = 0
+        self.backward_ratio = 0
+
+    def set_navi_param(self, param_name, param):
 
         if param_name != 'inflation_radius':
             self.planner_client.update_configuration({param_name.split("/")[-1]: param})
@@ -167,11 +178,10 @@ class DWA_move_base():
                 self.planner_client.update_configuration({'min_vel_theta': -param})
                 rospy.set_param('/move_base/' + 'min_vel_theta', -param)
         else:
-            if flag == False:
-                self.global_costmap_client.update_configuration({param_name: param})
-                self.local_costmap_client.update_configuration({param_name: param})
-                rospy.set_param('/move_base/global_costmap/inflation_layer/' + param_name, param)
-                rospy.set_param('/move_base/local_costmap/inflation_layer/' + param_name, param)
+            self.global_costmap_client.update_configuration({param_name: param})
+            self.local_costmap_client.update_configuration({param_name: param})
+            rospy.set_param('/move_base/global_costmap/inflation_layer/' + param_name, param)
+            rospy.set_param('/move_base/local_costmap/inflation_layer/' + param_name, param)
 
     def get_navi_param(self, param_name):
         if param_name != 'inflation_radius':
@@ -322,3 +332,21 @@ class DWA_move_base():
             except:
                 pass
         return cm
+
+    def get_dwa_fail(self):
+        if len(self.robot_config.vx_hist) == 0:
+            return 0
+
+        self.backward_count = sum(1 for t, v in self.robot_config.vx_hist if v < -0.05)
+        self.backward_ratio = self.backward_count / len(self.robot_config.vx_hist)
+
+        if self.backward_ratio >= 0.3:
+            return np.random.uniform(0.25, 0.4)
+        elif self.backward_ratio >= 0.2:
+            return np.random.uniform(0.15, 0.25)
+        elif self.backward_ratio >= 0.1:
+            return np.random.uniform(0.1, 0.15)
+        elif self.backward_ratio >= 0.05:
+            return np.random.uniform(0.05, 0.1)
+        else:
+            return 0

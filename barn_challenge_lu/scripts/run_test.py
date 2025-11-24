@@ -32,7 +32,7 @@ def path_coord_to_gazebo_coord(x, y):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='test BARN navigation challenge')
     parser.add_argument('--world_idx', type=int, default=0)
-    parser.add_argument('--planner', type=str, default="ddp")
+    parser.add_argument('--planner', type=str, default="MPPI")
     parser.add_argument('--gui', type=str, default="true")
     parser.add_argument('--out', type=str, default="out.txt")
     args = parser.parse_args()
@@ -101,11 +101,11 @@ if __name__ == "__main__":
     ## (Customize this block to add your own navigation stack)
     ##########################################################################################
 
-    # launch_file = join(base_path, "launch/move_base_Lu.launch")
-    # nav_stack_process = subprocess.Popen([
-    #     'roslaunch',
-    #     launch_file,
-    # ])
+    launch_file = join(base_path, "launch/move_base_Lu.launch")
+    nav_stack_process = subprocess.Popen([
+        'roslaunch',
+        launch_file,
+    ])
 
     # # Make sure your navigation stack recives the correct goal position defined in GOAL_POSITION
     # import actionlib

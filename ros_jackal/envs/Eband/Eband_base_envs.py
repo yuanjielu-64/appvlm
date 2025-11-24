@@ -124,15 +124,20 @@ class DWABase(gym.Env):
     def reset(self):
         """reset the environment
         """
-        self.step_count=0
-        # Reset robot in odom frame clear_costmap
-        self.gazebo_sim.unpause()
-        # Resets the state of the environment and returns an initial observation
+        self.step_count = 0
         self.gazebo_sim.reset()
+        self.jackal_ros.reset(self.param_init)
+        self.gazebo_sim.unpause()
         self._reset_move_base()
-        self.start_time = rospy.get_time()
+        self.jackal_ros.set_params(self.param_init)
         obs = self._get_observation()
+        self.jackal_ros.set_params(self.param_init)
         self.gazebo_sim.pause()
+
+        self._reset_reward()
+        self.jackal_ros.reference_state = copy.deepcopy(self.jackal_ros.state)
+        self.jackal_ros.save_info(self.param_init, True, False, None)
+
         self.collision_count = 0
         self.traj_pos = []
         self.smoothness = 0
@@ -158,48 +163,47 @@ class DWABase(gym.Env):
         take an action and step the environment
         """
 
+        result = self.jackal_ros.save_frame()
+
+        self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
+
         if self.jackal_ros.row != None:
 
             action_0 = [self.jackal_ros.row["max_vel_x"],
                       self.jackal_ros.row["max_vel_theta"],
-                      self.jackal_ros.row["vx_samples"],
-                      self.jackal_ros.row["vtheta_samples"],
-                      self.jackal_ros.row["path_distance_bias"],
-                      self.jackal_ros.row["goal_distance_bias"],
-                      self.jackal_ros.row["inflation"],
+                      self.jackal_ros.row["nr_pairs_"],
+                      self.jackal_ros.row["nr_steps_"],
+                      self.jackal_ros.row["linear_stddev"],
+                      self.jackal_ros.row["angular_stddev"],
+                      self.jackal_ros.row["lambda"],
+                      self.jackal_ros.row["final_inflation"],
                       ]
 
             self._take_action(action_0)
 
         else:
-
-            self._take_action(action)
+            action_0 = action
+            self._take_action(action_0)
 
         self.step_count += 1
 
-        if self.use_RL == True:
-            self.gazebo_sim.unpause()
-            obs = self._get_observation()
-            rew = self._get_reward()
-            done = self._get_done()
-            info = self._get_info()
-            self.gazebo_sim.pause()
+        self.gazebo_sim.unpause()
+        obs = self._get_observation()
+        self.jackal_ros.set_params(action)
+        self.gazebo_sim.pause()
 
-            self.jackal_ros.save_info(action)
-            self.jackal_ros.save_frame()
+        rew = self._get_reward()
+        done, status = self._get_done()
+        info = self._get_info(status)
 
-            pos = self.gazebo_sim.get_model_state().pose.position
-            self.traj_pos.append((pos.x, pos.y))
-            return obs, rew, done, info
+        if done == True:
+            self.jackal_ros.save_info(action, False, True, info)
         else:
-            done = self._get_done()
+            self.jackal_ros.save_info(action, False, False, info)
 
-            self.jackal_ros.save_info([])
-            self.jackal_ros.save_frame()
-
-            pos = self.gazebo_sim.get_model_state().pose.position
-            self.traj_pos.append((pos.x, pos.y))
-            return [], 0, done, []
+        pos = self.gazebo_sim.get_model_state().pose.position
+        self.traj_pos.append((pos.x, pos.y))
+        return obs, rew, done, info
 
     def _take_action(self, action):
         raise NotImplementedError()

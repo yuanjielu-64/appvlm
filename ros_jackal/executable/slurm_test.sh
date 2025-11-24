@@ -11,7 +11,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=1GB
 
-SINGULARITY_BASE=/scratch/ylu22/applr/src/ros_jackal
+SINGULARITY_BASE=/scratch/ylu22/appvlm/src/ros_jackal
 SINGULARITY_IMG=$SINGULARITY_BASE/jackal.sif
 
 export ROS_HOSTNAME=localhost
@@ -26,4 +26,4 @@ ACTOR_ID=$1
 MODEL_ID=$2
 BASE_LINE=$3
 
-./singularity_run.sh $SINGULARITY_IMG python3 td3/tester.py --buffer_path buffer/ --id $ACTOR_ID --test_id $MODEL_ID --baseline $BASE_LINE --world_path jackal_helper/worlds/BARN/
+./singularity_run.sh $SINGULARITY_IMG python3 script/generate_data.py --buffer_path buffer/ --id $ACTOR_ID --world_path jackal_helper/worlds/BARN/ --policy_name dwa_heurstic

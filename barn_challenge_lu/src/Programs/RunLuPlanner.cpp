@@ -15,11 +15,11 @@
 
 using namespace Antipatrea;
 
-extern "C" int RunDDP(int argc, char **argv) {
+extern "C" int RunMPPI(int argc, char **argv) {
  Setup setup;
     Params params;
 
-    ros::init(argc, argv, "DDPMPPI");
+    ros::init(argc, argv, "MPPI");
 
     params.ReadFromFile(argv[1]);
     params.ProcessArgs(2, argc - 1, argv);
@@ -87,39 +87,3 @@ extern "C" int RunDDP(int argc, char **argv) {
 
     return 0;
 }
-
-//if (i < 0) {
-//GManager gManager;
-//GManagerMP gMP;
-//GManagerDecomposition gDecomposition;
-//GManagerGoals gGoals;
-//GManagerSimulator gSimulator;
-//
-//gDecomposition.SetSetup(&setup);
-//gDecomposition.SetManager(&gManager);
-//gManager.GetComponents()->push_back(&gDecomposition);
-//
-//gGoals.SetSetup(&setup);
-//gGoals.SetManager(&gManager);
-//gManager.GetComponents()->push_back(&gGoals);
-//
-//gSimulator.SetSetup(&setup);
-//gSimulator.SetManager(&gManager);
-//gManager.GetComponents()->push_back(&gSimulator);
-//
-//gMP.SetSetup(&setup);
-//gMP.SetManager(&gManager);
-//gManager.GetComponents()->push_back(&gMP);
-//
-//auto data = params.GetData(Antipatrea::Constants::KW_Graphics);
-//if (data && data->m_params) {
-//GDrawSetupFromParams(*(data->m_params));
-//gManager.SetupFromParams(*(data->m_params));
-//gMP.SetupFromParams(*(data->m_params));
-//gDecomposition.SetupFromParams(*(data->m_params));
-//gGoals.SetupFromParams(*(data->m_params));
-//gSimulator.SetupFromParams(*(data->m_params));
-//}
-//
-//gManager.MainLoop("GRunMP");
-//}

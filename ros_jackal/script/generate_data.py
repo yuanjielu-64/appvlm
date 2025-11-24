@@ -117,8 +117,10 @@ def main(id):
     env_config = config['env_config']
     world_name = get_world_name(config, id)
     env_config["kwargs"]["world_name"] = world_name
+    env_config["kwargs"]["WORLD_PATH"] = words
 
     env_config["kwargs"]["img_dir"] = file_sync.actor_dir
+    env_config["kwargs"]["pid"] = id
 
     env = gym.make(env_config["env_id"], **env_config["kwargs"])
 
@@ -131,9 +133,12 @@ def main(id):
 
     print(">>>>>>>>>>>>>> Running on %s <<<<<<<<<<<<<<<<" %(world_name))
 
-    while True:
-        obs = env.reset()
+    num_trials = 1000
+    ep = 0
 
+    while ep < num_trials:
+        obs = env.reset()
+        ep += 1
         done = False
         policy = load_policy(policy)
 
@@ -146,13 +151,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'start an actor')
     parser.add_argument('--id', dest='actor_id', type = int, default = 0)
     #parser.add_argument('--policy_name', dest='policy_name', default="move_base")
-    parser.add_argument('--policy_name', dest='policy_name', default="dwa_heurstic")
+    parser.add_argument('--policy_name', dest='policy_name', default="teb_heurstic")
     parser.add_argument('--buffer_path', dest='buffer_path', default="../buffer/")
-    parser.add_argument('--world_path', dest='world_path', default="../jackal_helper/worlds/BARN1/")
+    parser.add_argument('--world_path', dest='world_path', default="../jackal_helper/worlds/BARN/")
 
     args = parser.parse_args()
     BUFFER_PATH = args.buffer_path
     WORLD_PATH = args.world_path
+    words = os.path.join(*WORLD_PATH.split(os.sep)[-3:])
 
     if (os.path.exists(BUFFER_PATH + args.policy_name) == False):
         os.makedirs(BUFFER_PATH + args.policy_name, exist_ok=True)

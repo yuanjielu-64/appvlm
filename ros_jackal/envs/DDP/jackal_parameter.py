@@ -15,7 +15,6 @@ RANGE_DICT = {
     'max_vel_x': [0.0, 2],
     "max_vel_theta": [0.314, 3.14],
     "nr_pairs_": [400, 800],
-    "dist_local_goal": [1, 6],
     "distance": [0.01, 0.4],
     "robot_radius": [0.01, 0.15],
     "inflation_radius": [0.1, 0.6],
@@ -24,11 +23,10 @@ RANGE_DICT = {
 class Parameters(JackalBase):
     def __init__(
             self,
-            param_init=[1.5, 3, 600, 4, 0.1, 0.02, 0.25],
+            param_init=[1.5, 3, 600, 0.1, 0.02, 0.25],
             param_list=["max_vel_x",
                  "max_vel_theta",
                  "nr_pairs_",
-                 "dist_local_goal",
                  "distance",
                  "robot_radius",
                  "inflation_radius"],
@@ -50,19 +48,26 @@ class Parameters(JackalBase):
 
     def _take_action(self, action):
         assert len(action) == len(self.param_list), "length of the params should match the length of the action"
-        self.params = action
 
+        # Clip all actions to RANGE_DICT limits
+        clipped_action = []
+        for param_value, param_name in zip(action, self.param_list):
+            low, high = RANGE_DICT[param_name]
+            clipped_value = np.clip(param_value, low, high)
+            clipped_action.append(clipped_value)
+
+        self.params = clipped_action
         self.gazebo_sim.unpause()
 
-        self.jackal_ros.set_params(action)
+        # Set parameters
+        self.jackal_ros.set_params(clipped_action)
 
-        for param_value, param_name in zip(action, self.param_list):
-            if (param_name == 'inflation_radius'):
-                high_limit = RANGE_DICT[param_name][1]
-                low_limit = RANGE_DICT[param_name][0]
-                param_value = float(np.clip(param_value, low_limit, high_limit))
-                self.move_base.set_navi_param(param_name, param_value)
-        # Wait for robot to navigate for one time step
+        # Special handling for inflation_radius
+        for param_value, param_name in zip(clipped_action, self.param_list):
+            if param_name == 'inflation_radius':
+                self.move_base.set_navi_param(param_name, float(param_value))
+
         rospy.sleep(self.time_step)
         self.gazebo_sim.pause()
+        self.jackal_ros.last_action = clipped_action
 

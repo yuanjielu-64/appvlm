@@ -281,7 +281,7 @@ Visualization Manager:
       Radius: 0.029999999329447746
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
-      Topic: /smooth_global_path
+      Topic: /move_base/NavfnROS/plan
       Unreliable: false
       Value: true
     - Class: rviz/Marker
@@ -289,7 +289,7 @@ Visualization Manager:
       Marker Topic: /global_goal
       Name: Marker
       Namespaces:
-        {}
+        point_marker: true
       Queue Size: 100
       Value: true
     - Class: rviz/Marker
@@ -297,7 +297,7 @@ Visualization Manager:
       Marker Topic: /local_goal
       Name: Marker
       Namespaces:
-        {}
+        point_marker: true
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -429,7 +429,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 4.665798187255859
+      Angle: 4.720798492431641
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -441,8 +441,8 @@ Visualization Manager:
       Near Clip Distance: 0.009999999776482582
       Scale: -95.56423950195312
       Target Frame: <Fixed Frame>
-      X: -0.5686576962471008
-      Y: 6.089901447296143
+      X: 0.3875148892402649
+      Y: 4.934656620025635
     Saved: ~
 Window Geometry:
   Displays:

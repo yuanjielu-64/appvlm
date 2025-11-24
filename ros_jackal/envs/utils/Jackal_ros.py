@@ -8,6 +8,7 @@ import cv2
 import pandas as pd
 import tf
 import os
+import copy
 
 from scipy.signal import savgol_filter
 
@@ -27,6 +28,20 @@ try:
     from std_msgs.msg import Header
 except ModuleNotFoundError:
     rospy = None
+
+PLANNER_PARAMS = {
+    "DWA": ["max_vel_x", "max_vel_theta", "vx_samples", "vtheta_samples",
+            "path_distance_bias", "goal_distance_bias", "inflation"],
+
+    "TEB": ["max_vel_x", "max_vel_theta", "min_obstacle_dist",
+            "weight_kinematics", "weight_obstacle", "inflation"],
+
+    "MPPI": ["num_samples", "horizon_length", "temperature",
+             "max_vel_x", "inflation"],
+
+    "DDP": ["iterations", "horizon", "max_vel_x",
+            "regularization", "inflation"]
+}
 
 @dataclass
 class Cfg:
@@ -77,6 +92,9 @@ class Cfg:
 class RobotState:
     x: float = 0.0; y: float = 0.0; z: float = 0.0
     theta: float = 0.0; v: float = 0.0; w: float = 0.0
+
+    def get_robot_state(self):
+        return np.array([self.x, self.y, self.theta, self.v, self.w])
 
 # ================== 3) 安全评估组件 ==================
 class SafetyAssessor:
@@ -193,6 +211,7 @@ class FrameDrawer:
     def __init__(self, cfg: Cfg):
         self.cfg = cfg
         self.frame_id = 0
+        self.img = None
 
     def _draw_robot(self, img, cx, cy, yaw):
         c = self.cfg
@@ -221,7 +240,7 @@ class FrameDrawer:
             iy = int(robot_center - by / c.target_res)
             pts.append((ix,iy))
         for i in range(len(pts)-1):
-            cv2.line(img, pts[i], pts[i+1], (255,0,255), path_w, lineType=cv2.LINE_AA)
+            cv2.line(img, pts[i], pts[i+1], (0, 0, 0), path_w, lineType=cv2.LINE_AA)
 
     def _draw_goals(self, img, robot_center, robot_x, robot_y, robot_yaw, local_goal, global_goal):
         c = self.cfg
@@ -305,7 +324,8 @@ class FrameDrawer:
     def save_frame(self, img_dir, state: RobotState, scan: LaserScan, global_path: Path,
                    local_goal, global_goal, save_points, alg):
 
-        if scan is None: return
+        if scan is None: return False
+
         c = self.cfg
         n = int(c.crop_size_m / c.target_res)
         img = np.ones((n,n,3), dtype=np.uint8) * 205
@@ -331,8 +351,8 @@ class FrameDrawer:
         #     self._draw_save_points(img, center, state.x, state.y, state.theta, save_points)
 
         axis_len = int(1.0 / c.target_res); axis_w = max(3, int(0.05/c.target_res))
-        cv2.line(img,(center,center),(center+axis_len,center),(255, 0, 0),axis_w)   # x-axis
-        cv2.line(img,(center,center),(center,center-axis_len),(0,255,0),axis_w)  # y-axis
+        cv2.line(img,(center,center),(center+axis_len,center),(0,255,0),axis_w)   # x-axis
+        cv2.line(img,(center,center),(center,center-axis_len),(255,0,0),axis_w)  # y-axis
         self._draw_robot(img, center, center, -math.pi/2)
 
         px = lambda m: int(m / c.target_res)
@@ -351,8 +371,21 @@ class FrameDrawer:
         if x1 > x0 and y1 > y0:
             img = img[y0:y1, x0:x1]
 
-        cv2.imwrite(os.path.join(img_dir, f"{alg}_{self.frame_id:06d}.png"), img)
-        self.frame_id += 1
+        self.img_dir = img_dir
+        self.alg = alg
+        self.img = copy.deepcopy(img)
+
+        return True
+
+    def generate_img(self):
+
+        if self.img is not None:
+            cv2.imwrite(os.path.join(self.img_dir, f"{self.alg}_{self.frame_id:06d}.png"), self.img)
+            self.frame_id += 1
+            return True
+
+        return False
+
 
 class GlobalFunc:
 
@@ -366,6 +399,7 @@ class GlobalFunc:
 
         self._last_cap = cfg.infl_max_hi
         self._ema_final = None
+        self.dists = []
 
     def reset(self):
         self.save_points = None
@@ -373,8 +407,9 @@ class GlobalFunc:
         self._vel_hist.clear()
         self._last_cap = self.cfg.infl_max_hi
         self._ema_final = None
+        self.dists = []
 
-    def assess(self, scan_odom, global_path, state, inflation_radius):
+    def assessDWA(self, scan_odom, global_path, state, inflation_radius):
 
         self._vel_hist.append(float(state.v))
 
@@ -388,12 +423,12 @@ class GlobalFunc:
 
         ir = float(np.clip(inflation_radius, lo, hi))
         path = self.get_points_from_path(global_path, state)
-        dists = self.get_corners_points(path, scan_odom, state)
+        self.dists = self.get_corners_points(path, scan_odom, state)
 
-        if dists is None or np.size(dists) == 0:
+        if self.dists is None or np.size(self.dists) == 0:
             target_raw = ir
         else:
-            d_min = float(np.min(dists))
+            d_min = float(np.min(self.dists))
             if state.v <= 0.0:
                 target_raw = max(lo, ir - np.random.uniform(0.02, 0.15))
             else:
@@ -401,6 +436,50 @@ class GlobalFunc:
                     target_raw = ir
                 elif 0.01 < d_min <= 0.05:
                     target_raw = ir
+                else:
+                    target_raw = ir
+
+        target_raw = float(np.clip(target_raw, lo, hi))
+        current = min(target_raw, hi)
+
+        if self._ema_final is None:
+            self._ema_final = current
+
+        alpha = 0.3
+        smoothed = alpha * current + (1 - alpha) * self._ema_final
+        self._ema_final = smoothed
+
+        return float(np.clip(smoothed, lo, hi))
+
+    def assessDDP(self, scan_odom, global_path, state, inflation_radius):
+
+        self._vel_hist.append(float(state.v))
+
+        hist = list(self._vel_hist)
+
+        if len(hist) < 3:
+            return inflation_radius
+
+        lo = float(getattr(self.cfg, "infl_max_lo", 0.20))
+        hi = self._dyn_inflation_cap()
+
+        ir = float(np.clip(inflation_radius, lo, hi))
+        path = self.get_points_from_path(global_path, state)
+        self.dists = self.get_corners_points(path, scan_odom, state)
+
+        if self.dists is None or np.size(self.dists) == 0:
+            target_raw = ir
+        else:
+            d_min = float(np.min(self.dists))
+            if state.v <= 0.1:
+                target_raw = max(lo, ir - np.random.uniform(0.02, 0.15))
+            else:
+                if d_min <= 0:
+                    target_raw = ir + np.random.uniform(0.05, 0.15)
+                elif 0 < d_min < 0.05:
+                    target_raw = ir + np.random.uniform(0.01, 0.04)
+                elif d_min < 0.10:
+                    target_raw = ir + np.random.uniform(0.01, 0.02)
                 else:
                     target_raw = ir
 
@@ -425,22 +504,38 @@ class GlobalFunc:
         hi = getattr(self.cfg, "infl_max_hi", 0.40)
         lo = getattr(self.cfg, "infl_max_lo", 0.10)
 
-        neg_count = sum(1 for v in hist if v < 0)  # 倒退次数
-        low_speed = sum(1 for v in hist if abs(v) < 0.1)  # 低速次数
+        neg_count = sum(1 for v in hist if v < 0)
+        low_speed = sum(1 for v in hist if abs(v) < 0.1)
         N = len(hist)
 
         consecutive_neg = 0
         max_consecutive_neg = 0
         for v in hist:
-            if v < 0.05:
+            if v < 0.0:
                 consecutive_neg += 1
                 max_consecutive_neg = max(max_consecutive_neg, consecutive_neg)
             else:
                 consecutive_neg = 0
 
+        consecutive_low = 0
+        max_consecutive_low = 0
+        for v in hist:
+            if abs(v) < 0.1:
+                consecutive_low += 1
+                max_consecutive_low = max(max_consecutive_low, consecutive_low)
+            else:
+                consecutive_low = 0
+
         target = hi
 
         if low_speed / N > 0.5:
+            target -= 0.10
+
+        if max_consecutive_low >= 3:
+            target -= 0.05
+        if max_consecutive_low >= 5:
+            target -= 0.05
+        if max_consecutive_low >= 7:
             target -= 0.05
 
         if neg_count >= 1:
@@ -675,11 +770,14 @@ class GlobalFunc:
 
 # ================== 5) 对外外观类 ==================
 class JackalRos:
-    def __init__(self, init_position, goal_position, use_move_base=False, img_dir=None, world_path = None, cfg: Cfg=Cfg()):
+    def __init__(self, init_position, goal_position, use_move_base=False, img_dir=None, world_path = None, id = 0, cfg: Cfg=Cfg()):
         self.cfg = cfg
         self.state = RobotState()
+        self.last_state = RobotState()
+        self.reference_state = RobotState()
         self.use_move_base = use_move_base
         self.img_dir = img_dir
+        self.planner_name = self._get_planner_name()
         self._csv_path = None
         self.local_goal = np.array([0.0, 4.0], dtype=float)
         self.start_position = init_position[:2]
@@ -689,6 +787,7 @@ class JackalRos:
         self.costmap: OccupancyGrid | None = None
         self.global_path: Path | None = None
         self.WORLD_PATH = world_path
+        self.id = id
 
         self._csv_path = os.path.join(img_dir, "data.csv") if img_dir else None
         self._trajectory_path = os.path.join(img_dir, "data_trajectory.csv") if img_dir else None
@@ -698,9 +797,13 @@ class JackalRos:
         self.bad_vel = 0; self.vel_counter = 0
         self.is_colliding = False; self.collision_count = 0
         self.collision_start_time = None; self.last_collision_duration = None
+        self.last_collision_time = None
+        self.should_abort = False
 
         self.path_curvature = 0.0
         self.local_plan: Path | None = None
+
+        self.max_collision_duration = 1
 
         self.row = None
 
@@ -709,7 +812,14 @@ class JackalRos:
 
         self.iteration = 0
 
+        # extra_parameters
+        self.teb_fail = 0
+        self.dwa_fail = 0
+
         self.prev_goal_dist = None
+        self.min_goal_dist = None
+        self.no_progress_count = 0
+        self.last_save_dist = None
 
         self.obs_odom = None
 
@@ -822,11 +932,29 @@ class JackalRos:
             self.global_goal = np.array([p.x, p.y], dtype=float)
 
     def _on_collision(self, msg: Bool):
-        now = rospy.get_time() if rospy else time.time()
-        if msg.data and not self.is_colliding:
-            self.collision_count += 1; self.collision_start_time = now; self.is_colliding = True
-        elif not msg.data and self.is_colliding:
-            self.last_collision_duration = (now - self.collision_start_time); self.is_colliding = False
+        current_time = rospy.get_time()
+
+        if msg.data:
+            self.last_collision_time = current_time
+
+            if not self.is_colliding:
+                self.is_colliding = True
+                self.collision_start_time = current_time
+                self.collision_count += 1
+
+        if self.is_colliding and self.last_collision_time is not None:
+            time_since_last = current_time - self.last_collision_time
+            if time_since_last > 0.25:
+                print(time_since_last)
+                self.is_colliding = False
+                self.last_collision_duration = current_time - self.collision_start_time
+                self.collision_start_time = None
+
+        if self.is_colliding and self.collision_start_time is not None:
+            duration = current_time - self.collision_start_time
+            if duration >= self.max_collision_duration:
+                self.should_abort = True
+                self.last_collision_duration = duration
 
     def _on_odom(self, msg: Odometry):
         q1,q2,q3,q0 = msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w
@@ -842,6 +970,9 @@ class JackalRos:
         elif self.start:
             if self.state.v <= 0.05: self.bad_vel += 1
             self.vel_counter += 1
+
+    def get_bad_vel(self):
+        return [self.bad_vel, self.vel_counter]
 
     def publish_scan_odom(self, stamp):
         pts = self.obs_odom
@@ -864,9 +995,16 @@ class JackalRos:
         if self.scan is None: return (vel_theta, -vel_theta)
         return self.safety.assessAngular(self.state)
 
-    def assess_inflation(self, inflation) -> float:
+    def assess_inflation(self, inflation, planner) -> float:
         if self.global_path is None: return inflation - 0.2
-        return self.globalFunc.assess(self.obs_odom, self.global_path, self.state, inflation)
+        if planner == 'DWA':
+            return self.globalFunc.assessDWA(self.obs_odom, self.global_path, self.state, inflation)
+        elif planner == 'DDP':
+            return self.globalFunc.assessDDP(self.obs_odom, self.global_path, self.state, inflation)
+        elif planner == 'TEB':
+            return self.globalFunc.assessTEB(self.obs_odom, self.global_path, self.state, inflation)
+        elif planner == 'MPPI':
+            return self.globalFunc.assessMPPI(self.obs_odom, self.global_path, self.state, inflation)
 
     def _odd(self, n):
         n = int(max(n, 3))
@@ -1031,6 +1169,9 @@ class JackalRos:
 
         self.pub_param.publish(msg)
 
+    def get_collision(self):
+        return self.is_colliding
+
     def set_dynamics_equation(self, action):
         if not rospy: return
         msg = Float64MultiArray()
@@ -1038,7 +1179,9 @@ class JackalRos:
         self.pub_dy.publish(msg)
 
     def save_frame(self):
-        if self.img_dir is None or self.scan is None: return
+
+        if self.img_dir is None or self.scan is None: return False
+
         if not os.path.exists(self.img_dir): os.makedirs(self.img_dir, exist_ok=True)
 
         if (self.iteration % 2 == 0):
@@ -1046,238 +1189,395 @@ class JackalRos:
         else:
             alg = "HB"
 
-
-        self.drawer.save_frame(self.img_dir, self.state, self.scan, self.global_path, self.local_goal, self.global_goal, self.globalFunc.save_points, alg)
+        return self.drawer.save_frame(self.img_dir, self.state, self.scan, self.global_path, self.local_goal, self.global_goal, self.globalFunc.save_points, alg)
 
     def save_info(self, action, start, done, info):
-
-        if (self.iteration % 2 == 0):
-            alg = "RL"
-        else:
-            alg = "HB"
 
         if not self.img_dir:
             return
 
-        if not os.path.exists(self.img_dir):
-            os.makedirs(self.img_dir, exist_ok=True)
-            self._csv_header_written = False
+        alg = "RL" if (self.iteration % 2 == 0) else "HB"
 
-        if self.drawer.frame_id == 0:
-            if os.path.exists(self._csv_path):
-                os.remove(self._csv_path)
-
-            if os.path.exists(self._trajectory_path):
-                os.remove(self._trajectory_path)
-
-            self._csv_header_written = False
-
-        if self._csv_path is None:
-            self._csv_path = os.path.join(self.img_dir, "data.csv")
-
-        if self._trajectory_path is None:
-            self._trajectory_path = os.path.join(self.img_dir, "data_trajectory.csv")
-
-        if start == True:
+        if start:
             self.start_frame_id = self.drawer.frame_id
 
-        if done == True:
-            self.done_frame_id = self.drawer.frame_id
-            opt_time, nav_metric =  self.get_score(self.start_position, self.global_goal, info['success'], info['time'], info['world'])
-            traj_header_needed = not os.path.exists(self._trajectory_path)
-            try:
-                with open(self._trajectory_path, 'a', newline='') as f:
-                    writer = csv.writer(f)
-                    if traj_header_needed:
-                        writer.writerow([
-                            "Method"
-                            "Start_frame_id",
-                            "Done_frame_id",
-                            "Collision",
-                            "Recovery",
-                            "Smoothness",
-                            "Success",
-                            "Time",
-                            "world"
-                            "optimal_time",
-                            "nav_metric",
-                        ])
+        if done:
+            self._save_trajectory_summary(alg, info)
+            return
 
-                    def _safe(v, default=-1.0):
-                        try:
-                            if np.isnan(v):
-                                return default
-                        except Exception:
-                            pass
-                        return v
+        self.row = self._build_row_data(alg, action)
 
-                    writer.writerow([
-                        alg,
-                        int(self.start_frame_id),
-                        int(self.done_frame_id),
-                        int(info['collision']),
-                        int(info['recovery']),
-                        float(info['smoothness']),
-                        info['success'],
-                        float(info['time']),
-                        info['world'],
-                        float(_safe(opt_time)),
-                        float(_safe(nav_metric)),
-                    ])
+        if not self.should_save_frame():
+            return
 
-                    self.iteration += 1
+        result = self.drawer.generate_img()
 
-            except Exception as e:
-                if rospy:
-                    rospy.logwarn(f"save_info() trajectory CSV write failed: {e}")
+        self._write_to_csv(result)
 
-        if alg == "RL":
-            gx, gy = float(self.global_goal[0]), float(self.global_goal[1])
-            goal_dist = math.hypot(self.state.x - gx, self.state.y - gy)
+    def should_save_frame(self):
+        """
+        数据过滤策略（优化版）：
+        1. 碰撞时不保存
+        2. 打破历史记录 → 必定保存
+        3. 相对起点累积靠近goal > 阈值 → 保存
+        4. 没有累积进展，但有转向/速度 → 条件保存
+        5. 完全无进展 → 累计计数，5次后1%概率保存
+        """
 
-            if self.prev_goal_dist is None:
-                delta_goal = 0.0
-            else:
-                delta_goal = self.prev_goal_dist - goal_dist
+        if self.is_colliding == True:
+            return False
 
-            eps = 0.02
-            moved_toward = 1 if delta_goal > eps else (-1 if delta_goal < -eps else 0)
+        delta_theta = abs(self.state.theta - self.reference_state.theta)
+        if delta_theta > math.pi:
+            delta_theta = 2 * math.pi - delta_theta
 
-            self.prev_goal_dist = goal_dist
+        # 2. 计算到goal的距离
+        gx, gy = float(self.global_goal[0]), float(self.global_goal[1])
 
-            self.row = {
-                "Method": alg,
-                "img_label": self.drawer.frame_id,
-                "linear_vel": self.state.v,
-                "angular_vel": self.state.w,
-                "pre_inflation_APPLR": float(action[6]),
-                "goal_dist": float(goal_dist),
-                "delta_goal_dist": float(delta_goal),
-                "moved_toward_goal": int(moved_toward),
-                "max_vel_x": float(action[0]),
-                "max_vel_theta": float(action[1]),
-                "vx_samples": int(action[2]),
-                "vtheta_samples": int(action[3]),
-                "path_distance_bias": float(action[4]),
-                "goal_distance_bias": float(action[5]),
-                "final_inflation": float(action[6]),
-            }
+        current_goal_dist = math.hypot(self.state.x - gx, self.state.y - gy)
+        reference_goal_dist = math.hypot(self.reference_state.x - gx,
+                                         self.reference_state.y - gy)
+
+        # 关键：计算相对于reference_state的累积进展（带方向）
+        cumulative_progress = reference_goal_dist - current_goal_dist
+
+        # 3. 判断是否打破历史最近距离
+        if self.min_goal_dist is None:
+            self.min_goal_dist = current_goal_dist
+            closer_to_goal = False
         else:
-            try:
-                v_max = self.assess_safety()
+            closer_to_goal = (self.min_goal_dist - current_goal_dist) > 0.1
+            if current_goal_dist < self.min_goal_dist:
+                self.min_goal_dist = current_goal_dist
 
-                if np.isnan(v_max):
-                    v_max = 1.5
+        # 4. 判断各种进展
+        is_turning = delta_theta > 0.2
+        has_velocity = abs(self.state.v) >= 0.1
 
-            except Exception:
-                v_max = 1.5
+        # 累积靠近goal超过0.15m（只计正向进展）
+        has_cumulative_progress = cumulative_progress > 0.15
 
-            try:
-                min_vel_theta, max_vel_theta = self.assess_vel_angular(action[1])
+        # === 分层判断 ===
+        # 第1优先级：打破历史记录 → 必定保存
+        if closer_to_goal:
+            self.reference_state = copy.deepcopy(self.state)
+            self.no_progress_count = 0
+            return True
 
-                if np.isnan(min_vel_theta):
-                    min_vel_theta = -2
-                if np.isnan(max_vel_theta):
-                    max_vel_theta = 2
+        # 第2优先级：相对起点有累积进展 → 必定保存
+        if has_cumulative_progress:
+            self.reference_state = copy.deepcopy(self.state)
+            self.no_progress_count = 0
+            return True
 
-            except Exception:
-                min_vel_theta, max_vel_theta = (-2.0, 2.0)
+        # 第3优先级：没有累积进展，但有转向或速度 → 条件保存
+        if is_turning or has_velocity:
+            self.no_progress_count += 1
+            if self.no_progress_count % 3 == 0:
+                self.reference_state = copy.deepcopy(self.state)
+                self.no_progress_count = 0
+                return True
+            return False
 
-            try:
-                inflation = self.assess_inflation(action[6])
+        # 第4优先级：完全无进展
+        self.no_progress_count += 1
 
-                if np.isnan(inflation):
-                    inflation = 0.3
+        if self.no_progress_count > 4:
+            if np.random.random() < 0.05:
+                return True
+            return False
 
-            except Exception:
-                inflation = 0.3
+        return True
 
-            try:
-                vx_samples = self._get_action_value(action, 2, default=0.0)
-                if np.isnan(vx_samples):
-                    vx_samples = 12
-            except Exception as e:
-                vx_samples = 12
+    def _compute_goal_metrics(self):
+        gx, gy = float(self.global_goal[0]), float(self.global_goal[1])
+        goal_dist = math.hypot(self.state.x - gx, self.state.y - gy)
 
-            try:
-                vtheta_samples = self._get_action_value(action, 3, default=0.0)
-                if np.isnan(vtheta_samples):
-                    vtheta_samples = 40
-            except Exception:
-                vtheta_samples = 40
+        delta_goal = 0.0 if self.prev_goal_dist is None else self.prev_goal_dist - goal_dist
+        moved_toward = 1 if delta_goal > 0.05 else (-1 if delta_goal < -0.05 else 0)
 
-            ratio = vx_samples / vtheta_samples if vtheta_samples != 0 else 1.0
+        if self.min_goal_dist is None or goal_dist < self.min_goal_dist:
+            self.min_goal_dist = goal_dist
 
-            target_product = np.random.uniform(400, 600)
+        self.prev_goal_dist = goal_dist
+        return float(goal_dist), float(delta_goal), int(moved_toward)
 
-            vtheta_samples = np.sqrt(target_product / ratio)
-            vx_samples = ratio * vtheta_samples
+    def _build_row_data(self, alg, action):
 
-            vx_samples = float(np.clip(vx_samples, 3, 50))
-            vtheta_samples = float(np.clip(vtheta_samples, 10, 50))
+        goal_dist, delta_goal, moved_toward = self._compute_goal_metrics()
 
-            if np.isnan(vx_samples):
-                vx_samples = 12
+        base_data = {
+            "Method": alg,
+            "img_label": self.drawer.frame_id,
+            "linear_vel": self.last_state.v,
+            "angular_vel": self.last_state.w,
+            "pre_inflation": self._safe_get(action, len(action) - 1, 0.0),
+            "goal_dist": goal_dist,
+            "delta_goal_dist": delta_goal,
+            "moved_toward_goal": moved_toward,
+            "next_linear_vel:": self.state.v,
+            "next_angular_vel": self.state.w
+        }
 
-            if np.isnan(vtheta_samples):
-                vtheta_samples = 40
+        planner_params = self._extract_planner_params(alg, action)
 
-            try:
-                path_distance_bias = self._get_action_value(action, 4, default=0.0)
-                if np.isnan(path_distance_bias):
-                    path_distance_bias = 0.05
-            except Exception:
-                path_distance_bias = 0.05
+        return {**base_data, **planner_params}
 
-            try:
-                goal_distance_bias = self._get_action_value(action, 5, default=0.0)
-                if np.isnan(goal_distance_bias):
-                    goal_distance_bias = 0.2
-            except Exception:
-                goal_distance_bias = 0.2
-
-            gx, gy = float(self.global_goal[0]), float(self.global_goal[1])
-            goal_dist = math.hypot(self.state.x - gx, self.state.y - gy)
-
-            if self.prev_goal_dist is None:
-                delta_goal = 0.0
+    def _extract_planner_params(self, alg, action):
+        if self.planner_name == "DWA":
+            if alg == "RL":
+                return {
+                    "max_vel_x": self._safe_get(action, 0),
+                    "max_vel_theta": self._safe_get(action, 1),
+                    "vx_samples": int(self._safe_get(action, 2)),
+                    "vtheta_samples": int(self._safe_get(action, 3)),
+                    "path_distance_bias": self._safe_get(action, 4),
+                    "goal_distance_bias": self._safe_get(action, 5),
+                    "final_inflation": max(0.1, self._safe_get(action, 6) - self.dwa_fail),
+                }
             else:
-                delta_goal = self.prev_goal_dist - goal_dist
+                v_max = self._safe_call(self.assess_safety, 1.5)
+                _, max_w = self._safe_call(lambda: self.assess_vel_angular(action[1]), (-2, 2))
+                inflation = self._safe_call(lambda: self.assess_inflation(action[6], 'DWA'), 0.3)
 
-            eps = 0.02
-            moved_toward = 1 if delta_goal > eps else (-1 if delta_goal < -eps else 0)
+                vx = self._safe_get(action, 2, 12)
+                vtheta = self._safe_get(action, 3, 40)
 
-            self.prev_goal_dist = goal_dist
+                ratio = vx / vtheta if vtheta != 0 else 1.0
+                target = np.random.uniform(400, 600)
+                vtheta = np.clip(np.sqrt(target / ratio), 10, 50)
+                vx = np.clip(ratio * vtheta, 3, 50)
 
-            self.row = {
-                "Method": alg,
-                "img_label": self.drawer.frame_id,
-                "linear_vel": self.state.v,
-                "angular_vel": self.state.w,
-                "pre_inflation_APPLR": float(action[6]),
-                "goal_dist": float(goal_dist),
-                "delta_goal_dist": float(delta_goal),
-                "moved_toward_goal": int(moved_toward),
-                "max_vel_x": float(v_max),
-                "max_vel_theta": float(max_vel_theta),
-                "vx_samples": int(vx_samples),
-                "vtheta_samples": int(vtheta_samples),
-                "path_distance_bias": float(path_distance_bias),
-                "goal_distance_bias": float(goal_distance_bias),
-                "final_inflation": float(inflation),
-            }
+                if not math.isnan(vx):
+                    vx = int(vx)
+                else:
+                    vx = 12
 
-        write_header = not self._csv_header_written or (not os.path.exists(self._csv_path))
+                if not math.isnan(vtheta):
+                    vtheta = int(vtheta)
+                else:
+                    vtheta = 50
+
+                return {
+                    "max_vel_x": v_max,
+                    "max_vel_theta": max_w if isinstance(max_w, float) else max_w[1],
+                    "vx_samples": int(vx),
+                    "vtheta_samples": int(vtheta),
+                    "path_distance_bias": self._safe_get(action, 4, 0.05),
+                    "goal_distance_bias": self._safe_get(action, 5, 0.2),
+                    "final_inflation": max(0.1, inflation - self.dwa_fail),
+                }
+        elif self.planner_name == "TEB":
+            if alg == "RL":
+                return {
+                    "max_vel_x": self._safe_get(action, 0),
+                    "max_vel_x_backwards": self._safe_get(action, 1),
+                    "max_vel_theta": int(self._safe_get(action, 2)),
+                    "dt_ref": int(self._safe_get(action, 3)),
+                    "min_obstacle_dist": self._safe_get(action, 4),
+                    "inflation_dist": self._safe_get(action, 5),
+                    "final_inflation": self._safe_get(action, 6),
+                }
+            else:
+                v_max = self._safe_call(self.assess_safety, 1.5)
+                _, max_w = self._safe_call(lambda: self.assess_vel_angular(action[1]), (-2, 2))
+                inflation = self._safe_call(lambda: self.assess_inflation(action[6], 'TEB'), 0.3)
+
+                if self.state.v >= 1.5:
+                    min_obstacle_dist = np.random.uniform(0.25, 0.35)
+                    inflation_dist = np.random.uniform(0.30, 0.50)
+
+                elif self.state.v >= 1.0:
+                    min_obstacle_dist = np.random.uniform(0.18, 0.25)
+                    inflation_dist = np.random.uniform(0.20, 0.35)
+
+                else:
+                    min_obstacle_dist = np.random.uniform(0.12, 0.18)
+                    inflation_dist = np.random.uniform(0.15, 0.25)
+
+                return {
+                    "max_vel_x": v_max,
+                    "max_vel_x_backwards": action[1],
+                    "max_vel_theta": max_w if isinstance(max_w, float) else max_w[1],
+                    "dt_ref": action[3],
+                    "min_obstacle_dist": min_obstacle_dist,
+                    "inflation_dist": inflation_dist,
+                    "final_inflation": max(0.1, inflation - self.teb_fail),
+                }
+        elif self.planner_name == "DDP":
+            if alg == "RL":
+
+                PARAM_LIMITS = {
+                    'max_vel_x': [0.0, 2.0],
+                    'max_vel_theta': [0.314, 3.14],
+                    'nr_pairs_': [400, 800],
+                    'distance': [0.01, 0.4],
+                    'robot_radius': [0.01, 0.15],
+                    'inflation_radius': [0.1, 0.6],
+                }
+
+                return {
+                    "max_vel_x": self._clip_param(action, 0, PARAM_LIMITS['max_vel_x']),
+                    "max_vel_theta": self._clip_param(action, 1, PARAM_LIMITS['max_vel_theta']),
+                    "nr_pairs_": int(self._clip_param(action, 2, PARAM_LIMITS['nr_pairs_'])),
+                    "distance": self._clip_param(action, 3, PARAM_LIMITS['distance']),
+                    "robot_radius": self._clip_param(action, 4, PARAM_LIMITS['robot_radius']),
+                    "final_inflation": self._clip_param(action, 5, PARAM_LIMITS['inflation_radius']),
+                }
+            else:
+                v_max = self._safe_call(self.assess_safety, 1.5)
+                _, max_w = self._safe_call(lambda: self.assess_vel_angular(action[1]), (-2, 2))
+                inflation = self._safe_call(lambda: self.assess_inflation(action[5], 'DDP'), 0.25)
+
+                if self.state.v >= 1.5:
+                    nr_pairs = max(action[2], 500)
+                    distance = np.random.uniform(0.2, 0.4)
+                    robot_radius = np.random.uniform(0.10, 0.20)
+                elif self.state.v >= 1.0:
+                    nr_pairs = max(action[2], 600)
+                    distance = np.random.uniform(0.05, 0.15)
+                    robot_radius = np.random.uniform(0.05, 0.10)
+                else:
+                    nr_pairs = max(action[2], 800)
+                    distance = np.random.uniform(0.01, 0.05)
+                    robot_radius = np.random.uniform(0.01, 0.05)
+
+                return {
+                    "max_vel_x": v_max,
+                    "max_vel_theta": max_w if isinstance(max_w, float) else max_w[1],
+                    "nr_pairs_": int(nr_pairs),
+                    "distance": distance,
+                    "robot_radius": robot_radius,
+                    "final_inflation": inflation,
+                }
+        elif self.planner_name == "MPPI":
+            if alg == "RL":
+                return {
+                    "max_vel_x": self._safe_get(action, 0),
+                    "max_vel_theta": self._safe_get(action, 1),
+                    "nr_pairs_": int(self._safe_get(action, 2)),
+                    "nr_steps_": int(self._safe_get(action, 3)),
+                    "linear_stddev": self._safe_get(action, 4),
+                    "angular_stddev": self._safe_get(action, 5),
+                    "lambda": self._safe_get(action, 6),
+                    "final_inflation": self._safe_get(action, 7),
+                }
+            else:
+                v_max = self._safe_call(self.assess_safety, 1.5)
+                _, max_w = self._safe_call(lambda: self.assess_vel_angular(action[1]), (-2, 2))
+                inflation = self._safe_call(lambda: self.assess_inflation(action[6], 'MPPI'), 0.3)
+
+                if self.state.v >= 1.5:
+                    nr_pairs = max(action[2], 500)
+                    nr_steps_ = np.random.uniform(10, 20)
+                    lambda_ = 5.0
+                elif self.state.v >= 1.0:
+                    nr_pairs = max(action[2], 600)
+                    nr_steps_ = np.random.uniform(20, 30)
+                    lambda_ = 10.0
+                else:
+                    nr_pairs = max(action[2], 800)
+                    nr_steps_ = np.random.uniform(30, 40)
+                    lambda_ = 15.0
+
+                return {
+                    "max_vel_x": v_max,
+                    "max_vel_theta": max_w if isinstance(max_w, float) else max_w[1],
+                    "nr_pairs_": int(nr_pairs),
+                    "nr_steps_": int(nr_steps_),
+                    "linear_stddev": self._safe_get(action, 4),
+                    "angular_stddev": self._safe_get(action, 5),
+                    "lambda": self._safe_get(action, 6),
+                    "final_inflation": inflation,
+                }
+
+    def _clip_param(self, action, idx, limits, default=None):
+
+        if default is None:
+            default = (limits[0] + limits[1]) / 2
+
+        val = self._safe_get(action, idx, default)
+        return float(np.clip(val, limits[0], limits[1]))
+
+    def _write_to_csv(self, result):
+
+        if not self.row:
+            return
+
+        if result == False:
+            return
+
+        write_header = not self._csv_header_written or not os.path.exists(self._csv_path)
 
         try:
             df = pd.DataFrame([self.row])
-            df.to_csv(self._csv_path, mode='a' if os.path.exists(self._csv_path) else 'w',
-                      header=write_header, index=False)
+            df.to_csv(self._csv_path, mode='a', header=write_header, index=False)
             self._csv_header_written = True
+
         except Exception as e:
             if rospy:
-                rospy.logwarn(f"save_info() CSV write failed: {e}")
+                rospy.logwarn(f"CSV write failed: {e}")
 
+    def _append_csv(self, path, data):
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        write_header = not os.path.exists(path)
+
+        try:
+            df = pd.DataFrame([data])
+            df.to_csv(path, mode='a', header=write_header, index=False)
+        except Exception as e:
+            if rospy:
+                rospy.logwarn(f"CSV append failed: {e}")
+
+    def _safe_get(self, action, idx, default=0.0):
+        try:
+            val = float(action[idx])
+            return default if np.isnan(val) else val
+        except:
+            return default
+
+    def _safe_call(self, func, default):
+        try:
+            result = func()
+            if isinstance(result, (list, tuple)):
+                return result if not any(np.isnan(x) for x in result) else default
+            return result if not np.isnan(result) else default
+        except:
+            return default
+
+    def _save_trajectory_summary(self, alg, info):
+
+        opt_time, nav_metric = self.get_score(
+            self.start_position, self.global_goal,
+            info['status'], info['time'], info['world']
+        )
+
+        if info['collision'] >= 1:
+            nav_metric = 0.0
+
+        summary = {
+            "Method": alg,
+            "Start_frame_id": self.start_frame_id,
+            "Done_frame_id": self.drawer.frame_id - 1,
+            "Collision": info['collision'],
+            "Recovery": info['recovery'],
+            "Smoothness": info['smoothness'],
+            "Status": info['status'],
+            "Time": info['time'],
+            "World": info['world'],
+            "optimal_time": opt_time,
+            "nav_metric": nav_metric,
+        }
+
+        self._append_csv(self._trajectory_path, summary)
+
+        test_dir = f"test_{'rl' if alg == 'RL' else 'hb'}"
+        test_path = os.path.join(os.path.dirname(self.img_dir), test_dir, f"test_results_{self.id}.csv")
+        self._append_csv(test_path,
+                         {k: v for k, v in summary.items() if k != "Start_frame_id" and k != "Done_frame_id"})
+
+        self.iteration += 1
 
     def _get_action_value(self, action, idx, default=None):
 
@@ -1293,17 +1593,47 @@ class JackalRos:
         self.collision_start_time = None; self.last_collision_duration = None
         self.bad_vel = 0; self.vel_counter = 0; self.start = False
         self.start_time = 0; self.last_action = init_params
+        self.last_collision_time = None
+        self.should_abort = False
         self.path_curvature = 0.0
         self.prev_goal_dist = None
+        self.min_goal_dist = None
+        self.no_progress_count = 0
+        self.last_save_dist = None
         self.local_plan = None
         self.row = None
         self.obs_odom = None
+
+        self.teb_fail = 0
+        self.dwa_fail = 0
+
         self.globalFunc.reset()
         self.safety.reset()
 
+    def _get_planner_name(self):
+
+        if not self.img_dir:
+            return "unknown"
+
+        parts = os.path.normpath(self.img_dir).split(os.sep)
+
+        known_planners = {'dwa', 'teb', 'mppi', 'ddp'}
+
+        for part in reversed(parts):
+
+            if part.startswith('actor_'):
+                continue
+
+            prefix = part.split('_')[0].lower()
+
+            if prefix in known_planners:
+                return prefix.upper()
+
+        return "UNKNOWN"
+
     def get_score(self, INIT_POSITION, GOAL_POSITION, status, time, world):
 
-        if status == True:
+        if status == "success":
             success = True
         else:
             success = False

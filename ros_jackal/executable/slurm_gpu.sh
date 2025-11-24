@@ -17,7 +17,7 @@ umask 0027
 
 nvidia-smi
 
-SINGULARITY_BASE=/scratch/ylu22/applr/src/ros_jackal
+SINGULARITY_BASE=/scratch/ylu22/appvlm/src/ros_jackal
 SINGULARITY_IMG=$SINGULARITY_BASE/jackal.sif
 
 module load singularity

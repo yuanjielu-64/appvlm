@@ -41,25 +41,28 @@ class TebParamContinuous(TebBase):
             dtype=np.float32
         )
 
-    def _get_info(self):
-        info = dict(success=self._get_success(), params=self.params)
-        info.update(super()._get_info())
-        return info
-
     def _take_action(self, action):
         assert len(action) == len(self.param_list), "length of the params should match the length of the action"
-        self.params = action
-        # Set the parameters
 
-        self.gazebo_sim.unpause()
+        clipped_action = []
         for param_value, param_name in zip(action, self.param_list):
-            high_limit = RANGE_DICT[param_name][1]
-            low_limit = RANGE_DICT[param_name][0]
-            param_value = float(np.clip(param_value, low_limit, high_limit))
-            self.move_base.set_navi_param(param_name, param_value, False)
-            # Wait for robot to navigate for one time step
+            low, high = RANGE_DICT[param_name]
+            clipped_value = np.clip(param_value, low, high)
+            clipped_action.append(clipped_value)
+
+        self.params = clipped_action
+        self.gazebo_sim.unpause()
+
+        # Set parameters
+        self.jackal_ros.set_params(clipped_action)
+
+        # Special handling for inflation_radius
+        for param_value, param_name in zip(clipped_action, self.param_list):
+            self.move_base.set_navi_param(param_name, float(param_value))
+
         rospy.sleep(self.time_step)
         self.gazebo_sim.pause()
+        self.jackal_ros.last_action = clipped_action
 
 class TebParamContinuousLaser(TebParamContinuous, TebBaseLaser):
     def __init__(self, **kwargs):

@@ -29,6 +29,7 @@ namespace Antipatrea {
             default:
                 return handleAbnormalPlaning(cmd_vel, best_traj, dt);
         }
+
     }
 
     bool MPPIPlanner::handleNoMapPlanning(geometry_msgs::Twist &cmd_vel) {
@@ -210,7 +211,7 @@ namespace Antipatrea {
             costs.push_back(cost);
             trajectories.push_back(traj);
 
-            if (cost.obs_cost_ != 1e6 && cost.path_cost_ != 1e6)
+            if (cost.obs_cost_ < 1e4 && cost.path_cost_ < 100.0)  // 与新惩罚值匹配
                 available_traj_count++;
         }
 
@@ -249,17 +250,61 @@ namespace Antipatrea {
 
         Window dw = calc_dynamic_window(state, dt);
 
+        // ============ MPPI历史控制序列初始化 ============
+        // 首次运行或步数不匹配时初始化
+        if (!has_previous_solution_ || u_optimal_.size() != nr_steps_) {
+            u_optimal_.clear();
+            u_optimal_.resize(nr_steps_);
+
+            // 初始化为中等速度
+            double init_v = (dw.min_velocity_ + dw.max_velocity_) / 2.0;
+            double init_w = 0.0;  // 初始角速度为0(直行)
+
+            for (int t = 0; t < nr_steps_; ++t) {
+                u_optimal_[t] = {init_v, init_w};
+            }
+            has_previous_solution_ = true;
+        }
+
+        // ============ 混合采样策略：探索 + 利用 ============
         std::vector<std::pair<double, double> > pairs;
 
-        for (int i = 0; i < nr_pairs_; ++i) {
+        int num_exploration = (int)(nr_pairs_ * exploration_ratio);  // 30%随机探索
+        int num_exploitation = nr_pairs_ - num_exploration;           // 70%基于历史
+
+        // 1️⃣ 探索性采样：完全随机 (保留原来的好处)
+        for (int i = 0; i < num_exploration; ++i) {
             double linear_velocity = RandomUniformReal(dw.min_velocity_, dw.max_velocity_);
             double angular_velocity = RandomUniformReal(dw.min_angular_velocity_, dw.max_angular_velocity_);
             pairs.emplace_back(linear_velocity, angular_velocity);
         }
 
+        // 2️⃣ 利用性采样：基于历史优化
+        for (int i = 0; i < num_exploitation; ++i) {
+            // 从历史控制序列中随机选一个时间步作为参考
+            int ref_step = (int)RandomUniformReal(0, nr_steps_ - 1);
+
+            // 高斯噪声扰动 (比原来更温和)
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::normal_distribution<double> v_dist(0.0, linear_stddev);
+            std::normal_distribution<double> w_dist(0.0, angular_stddev);
+
+            double linear_velocity = std::clamp(
+                u_optimal_[ref_step].first + v_dist(gen),
+                dw.min_velocity_, dw.max_velocity_
+            );
+            double angular_velocity = std::clamp(
+                u_optimal_[ref_step].second + w_dist(gen),
+                dw.min_angular_velocity_, dw.max_angular_velocity_
+            );
+
+            pairs.emplace_back(linear_velocity, angular_velocity);
+        }
+
         best_traj.first.reserve(nr_steps_);
 
-        num_threads = 16;
+        num_threads = 8;
 
         std::vector<std::thread> threads;
         threads.reserve(num_threads);
@@ -304,17 +349,17 @@ namespace Antipatrea {
 
         // robot->viewTrajectories(trajectories[0].first, nr_steps_, 0.0);
 
-        while (cost_it != costs.end() && traj_it != trajectories.end() && pairs_it != pairs.end()) {
-            if (cost_it->obs_cost_ == 1e6 || cost_it->path_cost_ == 1e6) {
-                cost_it = costs.erase(cost_it);
-                traj_it = trajectories.erase(traj_it);
-                pairs_it = pairs.erase(pairs_it);
-            } else {
-                ++cost_it;
-                ++traj_it;
-                ++pairs_it;
-            }
-        }
+        // while (cost_it != costs.end() && traj_it != trajectories.end() && pairs_it != pairs.end()) {
+        //     if (cost_it->obs_cost_ == 1e6 || cost_it->path_cost_ == 1e6) {
+        //         cost_it = costs.erase(cost_it);
+        //         traj_it = trajectories.erase(traj_it);
+        //         pairs_it = pairs.erase(pairs_it);
+        //     } else {
+        //         ++cost_it;
+        //         ++traj_it;
+        //         ++pairs_it;
+        //     }
+        // }
 
         if (costs.empty()) {
             ROS_ERROR_THROTTLE(1.0, "No available trajectory after cleaning.");
@@ -325,21 +370,46 @@ namespace Antipatrea {
         //Logger::m_out << "available trajectory " << available_traj_count << std::endl;
         normalize_costs(costs);
 
-        const size_t max_elements = 10;
-        const size_t top_n = std::min(max_elements, costs.size());
+        // ============ 标准MPPI权重计算 ============
+        // 找到最小cost用于数值稳定
+        double J_min = std::numeric_limits<double>::max();
+        for (const auto& cost : costs) {
+            J_min = std::min(J_min, cost.total_cost_);
+        }
 
-        std::vector<size_t> indices(costs.size());
-        std::iota(indices.begin(), indices.end(), 0);
-
-        std::sort(indices.begin(), indices.end(), [&](size_t i, size_t j) {
-            return costs[i].total_cost_ < costs[j].total_cost_;
-        });
-
-        double J_min = costs[indices[0]].total_cost_;
-        std::vector<double> costs_weights(top_n, 0.0);
-        const double lambda = 1.0;
+        std::vector<double> weights(costs.size());
         double weight_sum = 0.0;
 
+        for (size_t i = 0; i < costs.size(); ++i) {
+            // exp(-(J - J_min) / lambda), 减去J_min避免数值溢出
+            weights[i] = std::exp(-(costs[i].total_cost_ - J_min) / lambda);
+            weight_sum += weights[i];
+        }
+
+        // 检查权重和是否有效
+        if (weight_sum < 1e-10) {
+            ROS_ERROR("Weight sum is too small: %e. Using uniform weights.", weight_sum);
+            // 降级方案:均匀权重
+            double uniform_weight = 1.0 / costs.size();
+            std::fill(weights.begin(), weights.end(), uniform_weight);
+            weight_sum = 1.0;
+        }
+
+        // 归一化权重
+        for (size_t i = 0; i < costs.size(); ++i) {
+            weights[i] /= weight_sum;
+        }
+
+        // 加权平均控制输入(MPPI核心公式)
+        double delta_v_sum = 0.0;
+        double delta_w_sum = 0.0;
+
+        for (size_t i = 0; i < costs.size(); ++i) {
+            delta_v_sum += weights[i] * pairs[i].first;
+            delta_w_sum += weights[i] * pairs[i].second;
+        }
+
+        // 记录最优轨迹用于可视化(可选)
         for (size_t i = 0; i < costs.size(); ++i) {
             if (costs[i].total_cost_ < min_cost.total_cost_) {
                 min_cost = costs[i];
@@ -347,31 +417,20 @@ namespace Antipatrea {
             }
         }
 
-        for (size_t k = 0; k < top_n && k < indices.size(); ++k) {
-            size_t idx = indices[k];
-            costs_weights[k] = std::exp(-(costs[idx].total_cost_ - J_min) / lambda);
-            weight_sum += costs_weights[k];
-        }
-
-        if (weight_sum > 1e-6) {
-            for (size_t k = 0; k < top_n && k < indices.size(); ++k) {
-                costs_weights[k] /= weight_sum;
-            }
-        } else {
-            ROS_ERROR("Weight sum is zero. Check cost calculation.");
-            return false;
-        }
-
-        double delta_v_sum = 0.0;
-        double delta_w_sum = 0.0;
-
-        for (size_t k = 0; k < top_n && k < indices.size(); ++k) {
-            size_t idx = indices[k];
-            delta_v_sum += costs_weights[k] * pairs[idx].first;
-            delta_w_sum += costs_weights[k] * pairs[idx].second;
-        }
-
         best_traj.first = generateTrajectory(state, state_odom, delta_v_sum, delta_w_sum).first;
+
+        // ============ 更新历史最优控制序列 (Warm Start) ============
+        // 方案1: 时间前移 + 末尾补0
+        for (int t = 0; t < nr_steps_ - 1; ++t) {
+            u_optimal_[t] = u_optimal_[t + 1];  // 整体前移一步
+        }
+        // 最后一步设为加权平均结果
+        u_optimal_[nr_steps_ - 1] = {delta_v_sum, delta_w_sum};
+
+        // 方案2: 完全替换为当前加权结果 (更激进)
+        // for (int t = 0; t < nr_steps_; ++t) {
+        //     u_optimal_[t] = {delta_v_sum, delta_w_sum};
+        // }
 
         best_traj.second = true;
 
@@ -396,14 +455,14 @@ namespace Antipatrea {
             double dist = -1;
             std::vector<double> last_position;
 
+            // ✅ 改进: 在整个时间范围内采样时也考虑历史
             for (int j = 0; j < nr_steps_; ++j) {
                 double delta_v = linear_dist(gen);
                 double delta_w = angular_dist(gen);
 
+                // pairs[i]已经是基于历史的采样，这里只加小扰动
                 double sampled_v = pairs[i].first + delta_v;
                 double sampled_w = pairs[i].second + delta_w;
-                // double sampled_v = 1;
-                // double sampled_w = -0.7;
 
                 perturbations[j] = {sampled_v, sampled_w};
             }
@@ -607,7 +666,7 @@ namespace Antipatrea {
         Cost min_cost(1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6), max_cost;
 
         for (const auto &cost: costs) {
-            if (cost.obs_cost_ != 1e6) {
+            if (cost.obs_cost_ < 1e4) {  // 只归一化有效的代价值
                 min_cost.obs_cost_ = std::min(min_cost.obs_cost_, cost.obs_cost_);
                 max_cost.obs_cost_ = std::max(max_cost.obs_cost_, cost.obs_cost_);
                 if (use_goal_cost_) {
@@ -634,7 +693,7 @@ namespace Antipatrea {
         }
 
         for (auto &cost: costs) {
-            if (cost.obs_cost_ != 1e6) {
+            if (cost.obs_cost_ < 1e4) {  // 只处理有效的代价值
                 cost.obs_cost_ =
                         (cost.obs_cost_ - min_cost.obs_cost_) / (max_cost.obs_cost_ - min_cost.obs_cost_ + DBL_EPSILON);
                 if (use_goal_cost_) {
@@ -719,7 +778,7 @@ namespace Antipatrea {
             d += Algebra::PointDistance(2, &traj[i].pose()[0], &traj[i + 1].pose()[0]);
 
         if (d <= distance)
-            return 1e6;
+            return 100.0;  // 轨迹太短的惩罚
 
         std::vector<std::vector<double>> local_path = robot->local_paths;
         if (local_path.empty()) {
@@ -819,7 +878,7 @@ namespace Antipatrea {
                     dist = calculateDistanceToCarEdge(traj[i].x_, traj[i].y_, cosTheta, sinTheta, halfLength, halfWidth, obss[j]) - 0.05;
 
                 if (dist < DBL_EPSILON) {
-                    return 1e6;
+                    return 1e4;
                 }
 
                 min_dist = std::min(min_dist, dist);
@@ -830,8 +889,8 @@ namespace Antipatrea {
         if (min_dist < 0.1) {
             cost = 1.0 / std::pow(min_dist + 1e-6, 2);
 
-            if (cost >= 1e6)
-                return 1e6;
+            if (cost >= 1e4)
+                return 1e4;
 
         }else if (min_dist >= 0.1 && min_dist < 0.5) {
             cost = obs_range_ - min_dist + 1 / min_dist;

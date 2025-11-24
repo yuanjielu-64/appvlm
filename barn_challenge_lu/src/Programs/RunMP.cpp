@@ -146,7 +146,7 @@ extern "C" int RunMP(int argc, char **argv) {
 
         setup.GetMP()->Solve(1, 0.05, robot.canBeSolved);
 
-        auto state_it = state_descriptions.find(robot.getRobotState());
+        // auto state_it = state_descriptions.find(robot.getRobotState());
 
         // if (state_it != state_descriptions.end()) {
         //     Logger::m_out << "Robot STATE: " << state_it->second << std::endl;

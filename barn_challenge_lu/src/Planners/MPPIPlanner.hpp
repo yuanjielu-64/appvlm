@@ -224,6 +224,8 @@ namespace Antipatrea {
         int nr_steps_ = 20;
         double linear_stddev = 0.1;
         double angular_stddev = 0.05;
+        double lambda = 1;
+        double exploration_ratio = 0.3;  // 30%完全随机, 70%基于历史
 
         int v_steps_ = 20;
         int w_steps_ = 20;
@@ -255,6 +257,10 @@ namespace Antipatrea {
         std::mutex mtx;
 
         std::vector<std::vector<double> > local_paths;
+
+        // MPPI历史最优控制序列 [step][v, w]
+        std::vector<std::pair<double, double>> u_optimal_;
+        bool has_previous_solution_ = false;
     };
 
     ClassContainer(MPPIPlanner, m_MPPIPlanner);

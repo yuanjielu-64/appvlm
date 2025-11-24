@@ -30,6 +30,7 @@ From: ros:noetic
         ros-noetic-tf2-eigen \
         ros-noetic-tf2-kdl \
         ros-noetic-tf2-sensor-msgs \
+        ros-noetic-costmap-converter\
         ros-noetic-nmea-msgs \
         ros-noetic-roslint \
         ros-noetic-rosserial-server \
@@ -53,12 +54,12 @@ From: ros:noetic
 
     # Clone repository
     cd /jackal_ws/src
-    git clone https://github.com/yuanjielu-64/applr .
+    git clone https://github.com/yuanjielu-64/appvlm .
 
     # Install Python dependencies
     cd /jackal_ws/src/ros_jackal
     pip3 install -r requirements.txt
-    pip3 install scipy gymnasium psutil zipp pyquaternion
+    pip3 install scipy gymnasium psutil zipp pyquaternion pandas
 
     # Set up ROS workspace
     cd /jackal_ws

@@ -9,6 +9,7 @@ import cv2
 from os.path import dirname, join, abspath
 import subprocess
 from gym.spaces import Box, Discrete
+import copy
 
 from envs.utils import GazeboSimulation, Teb_move_base, JackalRos
 
@@ -28,7 +29,9 @@ class TebBase(gym.Env):
         collision_reward=0,
         smoothness_reward=0,
         verbose=True,
-        img_dir=None
+        img_dir=None,
+        pid = 0,
+        WORLD_PATH=None,
     ):
         """Base RL env that initialize jackal simulation in Gazebo
         """
@@ -57,6 +60,8 @@ class TebBase(gym.Env):
         self.use_RL = True
 
         self.img_dir = img_dir
+        self.p_id = pid
+        self.WORLD_PATH = WORLD_PATH
 
         self.launch_gazebo(world_name=self.world_name, gui=self.gui, verbose=self.verbose)
         self.launch_move_base(goal_position=goal_position,
@@ -83,7 +88,8 @@ class TebBase(gym.Env):
 
         rospack = rospkg.RosPack()
         self.BASE_PATH = rospack.get_path('jackal_helper')
-        world_name = join(self.BASE_PATH, "worlds/BARN1/", world_name)
+        self.WORLD_PATH = join(self.BASE_PATH, self.WORLD_PATH)
+        world_name = join(self.WORLD_PATH, world_name)
 
         if self.rviz_gui == False:
             launch_file = join(self.BASE_PATH, 'launch', 'gazebo_applr_teb.launch')
@@ -124,15 +130,20 @@ class TebBase(gym.Env):
     def reset(self):
         """reset the environment
         """
-        self.step_count=0
-        # Reset robot in odom frame clear_costmap
-        self.gazebo_sim.unpause()
-        # Resets the state of the environment and returns an initial observation
+        self.step_count = 0
         self.gazebo_sim.reset()
+        self.jackal_ros.reset(self.param_init)
+        self.gazebo_sim.unpause()
         self._reset_move_base()
-        self.start_time = rospy.get_time()
+        self.jackal_ros.set_params(self.param_init)
         obs = self._get_observation()
+        self.jackal_ros.set_params(self.param_init)
         self.gazebo_sim.pause()
+
+        self._reset_reward()
+        self.jackal_ros.reference_state = copy.deepcopy(self.jackal_ros.state)
+        self.jackal_ros.save_info(self.param_init, True, False, None)
+
         self.collision_count = 0
         self.traj_pos = []
         self.smoothness = 0
@@ -145,6 +156,7 @@ class TebBase(gym.Env):
         self.move_base.reset_robot_in_odom()
         self._clear_costmap()
         self.move_base.set_global_goal()
+        self.move_base.teb_fail_count = 0
 
     def _clear_costmap(self):
         self.move_base.clear_costmap()
@@ -154,22 +166,71 @@ class TebBase(gym.Env):
         self.move_base.clear_costmap()
 
     def step(self, action):
-        """
-        take an action and step the environment
+        """take an action and step the environment
         """
 
-        self._take_action(action)
+        alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
+
+        result = self.jackal_ros.save_frame()
+
+        self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
+
+        if alg == "RL":
+            action_0 = action
+            action_0[6] = max(0.1, action_0[6] - self.jackal_ros.teb_fail)
+            self._take_action(action_0)
+        else:
+            if self.jackal_ros.row != None:
+
+                action_0 = [self.jackal_ros.row["max_vel_x"],
+                          self.jackal_ros.row["max_vel_x_backwards"],
+                          self.jackal_ros.row["max_vel_theta"],
+                          self.jackal_ros.row["dt_ref"],
+                          self.jackal_ros.row["min_obstacle_dist"],
+                          self.jackal_ros.row["inflation_dist"],
+                          self.jackal_ros.row["final_inflation"],
+                          ]
+
+                self._take_action(action_0)
+            else:
+                action_0 = action
+                self._take_action(action_0)
+
         self.step_count += 1
+
         self.gazebo_sim.unpause()
-        self.jackal_ros.set_params(action)
         obs = self._get_observation()
-        rew = self._get_reward()
-        done = self._get_done()
-        info = self._get_info()
+
+        self.jackal_ros.teb_fail = self.move_base.get_teb_fail()
+
+        if self.move_base.teb_fail_count >= 30:
+            self.move_base.clear_costmap()
+
         self.gazebo_sim.pause()
+
+        rew = self._get_reward()
+        done, status = self._get_done()
+        info = self._get_info(status)
+
+        if done == True:
+            self.jackal_ros.save_info(action_0, False, True, info)
+        else:
+            self.jackal_ros.save_info(action_0, False, False, info)
+
         pos = self.gazebo_sim.get_model_state().pose.position
         self.traj_pos.append((pos.x, pos.y))
         return obs, rew, done, info
+
+    def _reset_reward(self):
+        self.traj_pos = []
+        self.collision_count = 0
+        self.smoothness = 0
+
+        robot_pos = self.jackal_ros.state.get_robot_state()
+        self.last_distance = self._compute_distance(
+            [robot_pos[0], robot_pos[1]],
+            self.global_goal
+        )
 
     def _take_action(self, action):
         raise NotImplementedError()
@@ -178,37 +239,52 @@ class TebBase(gym.Env):
         raise NotImplementedError()
 
     def _get_success(self):
-        # check the robot distance to the goal position
-
-        robot_position = np.array([self.move_base.robot_config.X,
-                                   self.move_base.robot_config.Y]) # robot position in odom frame
+        robot_position = [self.jackal_ros.state.get_robot_state()[0], self.jackal_ros.state.get_robot_state()[1]]
 
         if robot_position[1] > self.goal_position[1]:
             return True
 
-        if self.goal_position[1] == 10:
+        if self.global_goal[1] == 10:
             d = 1
         else:
             d = 4
 
-        if self._compute_distance(robot_position, self.goal_position[:2]) <= d:
+        if self._compute_distance(robot_position, self.global_goal) <= d:
             return True
 
         return False
 
     def _get_reward(self):
-        rew = self.slack_reward
+
+        if self.jackal_ros.get_collision():
+            return self.failure_reward
         if self.step_count >= self.max_step:  # or self._get_flip_status():
-            rew = self.failure_reward
+            return self.failure_reward
+
         if self._get_success():
-            rew = self.success_reward
-        laser_scan = np.array(self.move_base.get_laser_scan().ranges)
+            return self.success_reward
+        else:
+            rew = self.slack_reward
+
+        laser_scan = np.array(self.jackal_ros.scan.ranges)
         d = np.mean(sorted(laser_scan)[:10])
-        if d < 0.3:  # minimum distance 0.3 meter
-            rew += self.collision_reward / (d + 0.05)
+        if d < 0.05:
+            penalty_ratio = (1 - d / 0.05) ** 2
+            rew += self.collision_reward * penalty_ratio
+
+        robot_pos = self.jackal_ros.state.get_robot_state()
+        current_distance = self._compute_distance(
+            [robot_pos[0], robot_pos[1]],
+            self.global_goal
+        )
+
+        distance_progress = self.last_distance - current_distance
+        rew += distance_progress * 10
+        self.last_distance = current_distance
+
         smoothness = self._compute_angle(len(self.traj_pos) - 1)
-        # rew += self.smoothness_reward * smoothness
         self.smoothness += smoothness
+
         return rew
 
     def _compute_angle(self, idx):
@@ -229,21 +305,37 @@ class TebBase(gym.Env):
 
     def _get_done(self):
         success = self._get_success()
-        done = success or self.step_count >= self.max_step or self._get_flip_status()
-        return done
+        flip = self._get_flip_status()
+        timeout = self.step_count >= self.max_step
+        abort = self.jackal_ros.should_abort
+
+        if abort == True:
+            return True, "collision"
+
+        if success:
+            return True, "success"
+        elif flip:
+            return True, "flip"
+        elif timeout:
+            return True, "timeout"
+        else:
+            return False, "running"
 
     def _get_flip_status(self):
         robot_position = self.gazebo_sim.get_model_state().pose.position
         return robot_position.z > 0.1
 
-    def _get_info(self):
-        bn, nn = self.move_base.get_bad_vel_num()
-        self.collision_count += self.move_base.get_collision()
+    def _get_info(self, status):
+        bn, nn = self.jackal_ros.get_bad_vel()
+
+        self.collision_count += self.jackal_ros.get_collision()
+
         return dict(
             world=self.world_name,
-            time=rospy.get_time() - self.start_time,
+            time=rospy.get_time() - self.jackal_ros.start_time,
             collision=self.collision_count,
-            recovery=1.0 * bn / nn,
+            status=status,
+            recovery= 1.0 * (bn + 0.0001) / (nn + 0.0001),
             smoothness=self.smoothness
         )
 
@@ -267,7 +359,7 @@ class TebBase(gym.Env):
         """Use predefined start and goal position for BARN dataset
         """
         self.gazebo_sim = GazeboSimulation(init_position = init_position)
-        self.jackal_ros = JackalRos()
+        self.jackal_ros = JackalRos(init_position = init_position, goal_position = goal_position, use_move_base = True, img_dir = self.img_dir, world_path = self.WORLD_PATH, id = self.p_id)
         self.start_position = init_position
         self.global_goal = goal_position
         self.local_goal = [0, 0, 0]

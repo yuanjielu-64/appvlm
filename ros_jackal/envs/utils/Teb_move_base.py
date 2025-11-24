@@ -8,6 +8,7 @@ import time
 import dynamic_reconfigure.client
 from robot_localization.srv import SetPose
 from pyquaternion import Quaternion as qt
+from rosgraph_msgs.msg import Log
 
 from std_msgs.msg import Bool
 from std_srvs.srv import Empty
@@ -17,7 +18,7 @@ from move_base_msgs.msg import MoveBaseGoal, MoveBaseAction
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, Path, Odometry
 from nav_msgs.srv import GetPlan
-
+from teb_local_planner.msg import FeedbackMsg
 
 def _create_MoveBaseGoal(x, y, angle):
     """
@@ -165,7 +166,12 @@ class Teb_move_base():
 
         self.laser_scan = None
 
-    def set_navi_param(self, param_name, param, flag):
+        self.teb_fail_count = 0
+        self.teb_fail_threshold = 3
+
+        self.sub_rosout = rospy.Subscriber("/rosout", Log, self._rosout_callback)
+
+    def set_navi_param(self, param_name, param):
 
         if param_name != 'inflation_radius':
             self.planner_client.update_configuration({param_name.split("/")[-1]: param})
@@ -175,11 +181,11 @@ class Teb_move_base():
                 self.planner_client.update_configuration({'min_vel_theta': -param})
                 rospy.set_param('/move_base/' + 'min_vel_theta', -param)
         else:
-            if flag == False:
-                self.global_costmap_client.update_configuration({param_name: param})
-                self.local_costmap_client.update_configuration({param_name: param})
-                rospy.set_param('/move_base/global_costmap/inflation_layer/' + param_name, param)
-                rospy.set_param('/move_base/local_costmap/inflation_layer/' + param_name, param)
+            self.global_costmap_client.update_configuration({param_name: param})
+            self.local_costmap_client.update_configuration({param_name: param})
+            rospy.set_param('/move_base/global_costmap/inflation_layer/' + param_name, param)
+            rospy.set_param('/move_base/local_costmap/inflation_layer/' + param_name, param)
+
 
     def get_navi_param(self, param_name):
         if param_name != 'inflation_radius':
@@ -330,3 +336,38 @@ class Teb_move_base():
             except:
                 pass
         return cm
+
+    def _rosout_callback(self, msg):
+        if msg.name != "/move_base":
+            return
+
+        if "Aborting" in msg.msg:
+            self.teb_fail_count = 100
+
+        elif "recovery behavior started" in msg.msg:
+            self.teb_fail_count += 30
+
+        elif "Rotate recovery" in msg.msg:
+            self.teb_fail_count += 30
+
+        elif "trajectory is not feasible" in msg.msg:
+            self.teb_fail_count += 1
+
+        else:
+            self.teb_fail_count = 0
+
+    def get_teb_fail(self):
+
+        if self.teb_fail_count >= 20:
+            return np.random.uniform(0.25, 0.4)
+        elif self.teb_fail_count >= 10:
+            return np.random.uniform(0.15, 0.25)
+        elif self.teb_fail_count >= 5:
+            return np.random.uniform(0.1, 0.15)
+        elif self.teb_fail_count >= 3:
+            return np.random.uniform(0.05, 0.1)
+        else:
+            return 0
+
+    def reset_teb_counter(self):
+        self.teb_fail_count = 0

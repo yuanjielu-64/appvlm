@@ -7,11 +7,10 @@ env_config:
   use_pretrain: True
   action_type: "ddp_heurstic"
   kwargs:
-    param_init: [1.5, 3, 600, 4, 0.1, 0.02, 0.25]
+    param_init: [1.5, 3, 600, 0.1, 0.02, 0.25]
     param_list: ["max_vel_x",
                  "max_vel_theta",
                  "nr_pairs_",
-                 "dist_local_goal",
                  "distance",
                  "robot_radius",
                  "inflation_radius"]
@@ -28,7 +27,7 @@ env_config:
     success_reward: 20
     collision_reward: 0
     init_position: [-2, 3, 1.57]
-    goal_position: [0, 10, 0]
+    goal_position: [0, 15, 0]
 
     laser_clip: 2
 

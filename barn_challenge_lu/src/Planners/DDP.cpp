@@ -193,28 +193,6 @@ namespace Antipatrea {
         Timer::Clock d_t;
         Timer::Start(d_t);
 
-        // double total_explore_time = 2;
-
-        // timeInterval.clear();
-
-        //  double p = 1.7;
-        //  double alpha = 2;
-
-        //  double previous_time = 0.0;
-
-        //  for (int i = 1; i <= nr_steps_; ++i) {
-        //      double normalized_step = static_cast<double>(i) / nr_steps_;
-        //      double current_time = pow(normalized_step, p) * total_explore_time;
-        //      double interval = current_time - previous_time;
-        //      interval = std::round(interval * 10000.0) / 10000.0;
-        //      timeInterval.push_back(interval);
-        //      previous_time = current_time;
-
-        //      double weight = std::exp(-alpha * interval);
-        //      // double weight = xx + i * 0.2;
-        //      weights.push_back(weight);
-        //  }
-
         timeInterval = robot->timeInterval;
 
         best_traj.first.reserve(nr_steps_);
@@ -223,7 +201,7 @@ namespace Antipatrea {
 
         Window dw = calc_dynamic_window(state, dt);
 
-        num_threads = (int) 16;
+        num_threads = (int) 8;
         // Logger::m_out << "num_threads " << num_threads << std::endl;
 
         std::vector<std::vector<Cost> > thread_costs(num_threads);

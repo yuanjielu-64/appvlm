@@ -144,7 +144,6 @@ class mppi_MoveBase():
                 self.planner_client.update_configuration({'min_vel_theta': -param})
                 rospy.set_param('/move_base/' + 'min_vel_theta', -param)
         else:
-
             self.global_costmap_client.update_configuration({param_name: param})
             self.local_costmap_client.update_configuration({param_name: param})
             rospy.set_param('/move_base/global_costmap/inflation_layer/' + param_name, param)

@@ -32,7 +32,7 @@ def path_coord_to_gazebo_coord(x, y):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='test BARN navigation challenge')
     parser.add_argument('--world_idx', type=int, default=0)
-    parser.add_argument('--planner', type=str, default="ddp")
+    parser.add_argument('--planner', type=str, default="MPPI")
     parser.add_argument('--gui', type=str, default="false")
     parser.add_argument('--out', type=str, default="out.txt")
     args = parser.parse_args()

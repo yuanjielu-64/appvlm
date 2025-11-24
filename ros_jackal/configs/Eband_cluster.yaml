@@ -26,7 +26,7 @@ env_config:
     failure_reward: -100
     success_reward: 20
     init_position: [-2, 3, 1.57]
-    goal_position: [0, 10, 0]
+    goal_position: [0, 15, 0]
 
 training_config:
   algorithm: "TD3"
