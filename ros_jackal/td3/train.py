@@ -15,7 +15,7 @@ import time
 from pprint import pformat
 
 import torch
-from gitdb.util import mkdir
+
 from tensorboardX import SummaryWriter
 
 sys.path.append(dirname(dirname(abspath(__file__))))
@@ -383,7 +383,7 @@ if __name__ == "__main__":
     ACTION_TYPE = config["env_config"]["action_type"]
 
     if (os.path.exists(BUFFER_PATH + ACTION_TYPE) == False):
-        mkdir(BUFFER_PATH + ACTION_TYPE)
+        os.mkdir(BUFFER_PATH + ACTION_TYPE)
 
     BUFFER_PATH = BUFFER_PATH + ACTION_TYPE
 
