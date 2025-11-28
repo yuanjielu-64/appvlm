@@ -1,0 +1,71 @@
+Python Path:
+/home/bwang25/miniforge/envs/llava/bin/python
+Python 3.10.19
+BASE_RUN_NAME: llavanext-openai_clip-vit-large-patch14-336-Qwen_Qwen2.5-7B
+/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/transformers/utils/hub.py:124: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[2025-11-22 09:20:21,306] [INFO] [real_accelerator.py:203:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+Warning: The default cache directory for DeepSpeed Triton autotune, /home/bwang25/.triton/autotune, appears to be on an NFS system. While this is generally acceptable, if you experience slowdowns or hanging when DeepSpeed exits, it is recommended to set the TRITON_CACHE_DIR environment variable to a non-NFS path.
+[93m [WARNING] [0m async_io requires the dev libaio .so object and headers but these were not found.
+[93m [WARNING] [0m async_io: please install the libaio-devel package with yum
+[93m [WARNING] [0m If libaio is already installed (perhaps from source), try setting the CFLAGS and LDFLAGS environment variables to where it can be found.
+[93m [WARNING] [0m Please specify the CUTLASS repo directory as environment variable $CUTLASS_PATH
+/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/torch/utils/cpp_extension.py:28: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import packaging  # type: ignore[attr-defined]
+[93m [WARNING] [0m sparse_attn requires a torch version >= 1.5 and < 2.0 but detected 2.1
+[93m [WARNING] [0m using untested triton version (2.1.0), only 1.0.0 is known to be compatible
+/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/huggingface_hub/file_download.py:942: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+Rank 0:  Overwriting config with {'use_pos_skipping': False, 'pos_skipping_range': 4096, 'mm_spatial_pool_mode': 'bilinear'}
+Downloading shards:   0%|          | 0/4 [00:00<?, ?it/s]Downloading shards: 100%|██████████| 4/4 [00:00<00:00, 407.97it/s]
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s]Loading checkpoint shards:  25%|██▌       | 1/4 [00:04<00:12,  4.03s/it]Loading checkpoint shards:  50%|█████     | 2/4 [00:08<00:08,  4.21s/it]Loading checkpoint shards:  75%|███████▌  | 3/4 [00:12<00:04,  4.18s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:16<00:00,  4.27s/it]Loading checkpoint shards: 100%|██████████| 4/4 [00:16<00:00,  4.23s/it]
+Rank 0:  Adding LoRA adapters...
+Special tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.
+Rank 0:  Prompt version: qwen_1_5
+Rank 0:  Loading vision tower: openai/clip-vit-large-patch14-336
+/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/torch/_utils.py:831: UserWarning: TypedStorage is deprecated. It will be removed in the future and UntypedStorage will be the only storage class. This should only matter to you if you are using storages directly.  To access UntypedStorage directly, use tensor.untyped_storage() instead of tensor.storage()
+  return self.fget.__get__(instance, owner)()
+Rank 0:  Using mm_tunable_parts: mm_vision_tower,mm_mlp_adapter
+Rank 0:  Total parameters: ~8016.39 MB)
+Rank 0:  Trainable parameters: ~320.03 MB)
+Rank 0:  Loading /scratch/bwang25/appvlm/buffer/dwa_heurstic/splits_200k/chunk_001_filtered.json
+Traceback (most recent call last):
+  File "/home/bwang25/projects/LLaVA-NeXT/llava/train/train_mem.py", line 4, in <module>
+    train()
+  File "/home/bwang25/projects/LLaVA-NeXT/llava/train/train.py", line 1699, in train
+    data_module = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)
+  File "/home/bwang25/projects/LLaVA-NeXT/llava/train/train.py", line 1297, in make_supervised_data_module
+    train_dataset = LazySupervisedDataset(tokenizer=tokenizer, data_path=data_args.data_path, data_args=data_args)
+  File "/home/bwang25/projects/LLaVA-NeXT/llava/train/train.py", line 1033, in __init__
+    with open(data_path, "r") as file:
+FileNotFoundError: [Errno 2] No such file or directory: '/scratch/bwang25/appvlm/buffer/dwa_heurstic/splits_200k/chunk_001_filtered.json'
+[2025-11-22 09:22:01,680] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 0 (pid: 347643) of binary: /home/bwang25/miniforge/envs/llava/bin/python3.10
+Traceback (most recent call last):
+  File "/home/bwang25/miniforge/envs/llava/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+  File "/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/bwang25/miniforge/envs/llava/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+/home/bwang25/projects/LLaVA-NeXT/llava/train/train_mem.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-22_09:22:01
+  host      : gpu011.orc.gmu.edu
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 347643)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

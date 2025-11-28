@@ -121,6 +121,7 @@ def main(id):
 
     env_config["kwargs"]["img_dir"] = file_sync.actor_dir
     env_config["kwargs"]["pid"] = id
+    env_config["kwargs"]["use_vlm"] = False
 
     env = gym.make(env_config["env_id"], **env_config["kwargs"])
 
@@ -149,9 +150,9 @@ def main(id):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'start an actor')
-    parser.add_argument('--id', dest='actor_id', type = int, default = 127)
+    parser.add_argument('--id', dest='actor_id', type = int, default = 97)
     #parser.add_argument('--policy_name', dest='policy_name', default="move_base")
-    parser.add_argument('--policy_name', dest='policy_name', default="ddp_heurstic")
+    parser.add_argument('--policy_name', dest='policy_name', default="dwa_heurstic")
     parser.add_argument('--buffer_path', dest='buffer_path', default="../buffer/")
     parser.add_argument('--world_path', dest='world_path', default="../jackal_helper/worlds/BARN/")
 

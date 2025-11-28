@@ -15,27 +15,29 @@ except ModuleNotFoundError:
 
 from envs.utils import GazeboSimulation, ddp_MoveBase, JackalRos
 
+
 class JackalBase(gym.Env):
     def __init__(
-        self,
-        world_name="jackal_world.world",
-        planner='DDP',
-        max_velocity = 1.5,
-        gui=False,
-        rviz_gui=False,
-        init_position=None,
-        goal_position=None,
-        max_step=100,
-        time_step=1,
-        slack_reward=-1,
-        failure_reward=-50,
-        success_reward=0,
-        collision_reward=0,
-        smoothness_reward=0,
-        verbose=True,
-        img_dir=None,
-        pid=0,
-        WORLD_PATH=None,
+            self,
+            world_name="jackal_world.world",
+            planner='DDP',
+            max_velocity=1.5,
+            gui=False,
+            rviz_gui=False,
+            init_position=None,
+            goal_position=None,
+            max_step=100,
+            time_step=1,
+            slack_reward=-1,
+            failure_reward=-50,
+            success_reward=0,
+            collision_reward=0,
+            smoothness_reward=0,
+            verbose=True,
+            img_dir=None,
+            pid=0,
+            WORLD_PATH=None,
+            use_vlm=False
     ):
         """Base RL env that initialize jackal simulation in Gazebo
         """
@@ -46,7 +48,7 @@ class JackalBase(gym.Env):
         if goal_position is None:
             goal_position = [0, 15, 0]
 
-        self.use_RL = True
+        self.use_vlm = use_vlm
         self.rviz_gui = rviz_gui
         self.world_name = world_name
         self.gui = gui
@@ -134,16 +136,18 @@ class JackalBase(gym.Env):
 
         time.sleep(5)  # sleep to wait until the gazebo being created
 
-        # initialize the node for gym env
-        rospy.init_node('gym', anonymous=True, log_level=rospy.FATAL)
-        rospy.set_param('/use_sim_time', True)
+        # initialize the node for gym env (只初始化一次)
+        if not rospy.core.is_initialized():
+            rospy.init_node('gym', anonymous=True, log_level=rospy.FATAL)
+            rospy.set_param('/use_sim_time', True)
 
     def set_start_goal_BARN(self, init_position, goal_position):
         """Use predefined start and goal position for BARN dataset
         """
 
         self.gazebo_sim = GazeboSimulation(init_position)
-        self.jackal_ros = JackalRos(init_position = init_position, goal_position = goal_position, use_move_base = True, img_dir = self.img_dir, world_path = self.WORLD_PATH, id = self.p_id)
+        self.jackal_ros = JackalRos(init_position=init_position, goal_position=goal_position, use_move_base=True,
+                                    img_dir=self.img_dir, world_path=self.WORLD_PATH, id=self.p_id, use_vlm = self.use_vlm)
         self.start_position = init_position
         self.global_goal = goal_position
         self.local_goal = [0, 0, 0]
@@ -174,39 +178,49 @@ class JackalBase(gym.Env):
         self.traj_pos = []
         self.smoothness = 0
 
-        return obs
+        if self.use_vlm == False:
+            return obs
+        else:
+            return [self.jackal_ros.state.v, self.jackal_ros.state.w]
 
     def step(self, action):
         """
         take an action and step the environment
         """
-        alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
+        if self.use_vlm == False:
+            alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
 
-        result = self.jackal_ros.save_frame()
+            result = self.jackal_ros.save_frame()
 
-        self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
+            self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
 
-        if alg == "RL":
-            action_0 = action
-            self._take_action(action_0)
-        else:
-            if self.jackal_ros.row != None:
-
-                action_0 = [self.jackal_ros.row["max_vel_x"],
-                          self.jackal_ros.row["max_vel_theta"],
-                          self.jackal_ros.row["nr_pairs_"],
-                          self.jackal_ros.row["distance"],
-                          self.jackal_ros.row["robot_radius"],
-                          self.jackal_ros.row["final_inflation"],
-                          ]
-
-                self._take_action(action_0)
-
-            else:
+            if alg == "RL":
                 action_0 = action
                 self._take_action(action_0)
+            else:
+                if self.jackal_ros.row != None:
 
-        self.step_count += 1
+                    action_0 = [self.jackal_ros.row["max_vel_x"],
+                                self.jackal_ros.row["max_vel_theta"],
+                                self.jackal_ros.row["nr_pairs_"],
+                                self.jackal_ros.row["distance"],
+                                self.jackal_ros.row["robot_radius"],
+                                self.jackal_ros.row["final_inflation"],
+                                ]
+
+                    self._take_action(action_0)
+
+                else:
+                    action_0 = action
+                    self._take_action(action_0)
+
+            self.step_count += 1
+
+        else:
+            self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
+            action_0 = action
+            self._take_action(action_0)
+            self.step_count += 1
 
         self.gazebo_sim.unpause()
         obs = self._get_observation()
@@ -215,7 +229,6 @@ class JackalBase(gym.Env):
         rew = self._get_reward()
         done, status = self._get_done()
         info = self._get_info(status)
-        self.gazebo_sim.pause()
 
         if done == True:
             self.jackal_ros.save_info(action, False, True, info)
@@ -225,7 +238,10 @@ class JackalBase(gym.Env):
         pos = self.gazebo_sim.get_model_state().pose.position
         self.traj_pos.append((pos.x, pos.y))
 
-        return obs, rew, done, info
+        if self.use_vlm == False:
+            return obs, rew, done, info
+        else:
+            return [self.jackal_ros.state.v, self.jackal_ros.state.w], rew, done, info
 
     def _get_reward(self):
 
@@ -315,10 +331,9 @@ class JackalBase(gym.Env):
             time=rospy.get_time() - self.jackal_ros.start_time,
             collision=self.collision_count,
             status=status,
-            recovery= 1.0 * (bn + 0.0001) / (nn + 0.0001),
+            recovery=1.0 * (bn + 0.0001) / (nn + 0.0001),
             smoothness=self.smoothness
         )
-
 
     def _compute_distance(self, p1, p2):
         return ((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2) ** 0.5
@@ -361,6 +376,38 @@ class JackalBase(gym.Env):
         self.move_base.clear_costmap()
         rospy.sleep(0.1)
         self.move_base.clear_costmap()
+
+    def soft_close(self):
+        """只关闭 Gazebo 和 move_base，保留 roscore"""
+        rospy.logwarn("Soft closing environment (keeping roscore)...")
+
+        # 1. 先优雅地终止 move_base
+        try:
+            self.move_base_process.terminate()
+            self.move_base_process.wait(timeout=3)
+            rospy.loginfo("move_base terminated gracefully")
+        except:
+            rospy.logwarn("Force killing move_base")
+            self.move_base_process.kill()
+
+        time.sleep(1)
+
+        # 2. 再终止 Gazebo
+        try:
+            self.gazebo_process.terminate()
+            self.gazebo_process.wait(timeout=5)
+            rospy.loginfo("Gazebo terminated gracefully")
+        except:
+            rospy.logwarn("Force killing Gazebo")
+            self.gazebo_process.kill()
+
+        # 3. 确保 Gazebo 进程完全关闭
+        os.system("killall gzclient 2>/dev/null")
+        time.sleep(0.5)
+        os.system("killall gzserver 2>/dev/null")
+        time.sleep(1)
+
+        rospy.logwarn("Soft close completed")
 
     def close(self):
         # These will make sure all the ros processes being killed

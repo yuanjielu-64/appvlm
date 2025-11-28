@@ -1,0 +1,3 @@
+Method,Start_frame_id,Done_frame_id,Collision,Recovery,Smoothness,Status,Time,World,optimal_time,nav_metric
+VLM,0,10,0,0.08177591547291696,-2.813313121758569,success,8.563,world_0.world,8.558028082848947,0.5
+VLM,11,25,0,0.1571907763895023,-4.250237461171263,success,11.976000000000003,world_0.world,8.558028082848947,0.5

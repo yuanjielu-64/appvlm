@@ -770,7 +770,7 @@ class GlobalFunc:
 
 # ================== 5) 对外外观类 ==================
 class JackalRos:
-    def __init__(self, init_position, goal_position, use_move_base=False, img_dir=None, world_path = None, id = 0, cfg: Cfg=Cfg()):
+    def __init__(self, init_position, goal_position, use_move_base=False, img_dir=None, world_path = None, id = 0, cfg: Cfg=Cfg(), use_vlm = False):
         self.cfg = cfg
         self.state = RobotState()
         self.last_state = RobotState()
@@ -788,6 +788,8 @@ class JackalRos:
         self.global_path: Path | None = None
         self.WORLD_PATH = world_path
         self.id = id
+
+        self.use_vlm = use_vlm
 
         self._csv_path = os.path.join(img_dir, "data.csv") if img_dir else None
         self._trajectory_path = os.path.join(img_dir, "data_trajectory.csv") if img_dir else None
@@ -1184,35 +1186,63 @@ class JackalRos:
 
         if not os.path.exists(self.img_dir): os.makedirs(self.img_dir, exist_ok=True)
 
-        if (self.iteration % 2 == 0):
-            alg = "RL"
+        if self.use_vlm == False:
+            if (self.iteration % 2 == 0):
+                alg = "RL"
+            else:
+                alg = "HB"
         else:
-            alg = "HB"
+            alg = "VLM"
 
         return self.drawer.save_frame(self.img_dir, self.state, self.scan, self.global_path, self.local_goal, self.global_goal, self.globalFunc.save_points, alg)
 
     def save_info(self, action, start, done, info):
+        if self.use_vlm == False:
+            if not self.img_dir:
+                return
 
-        if not self.img_dir:
-            return
+            alg = "RL" if (self.iteration % 2 == 0) else "HB"
 
-        alg = "RL" if (self.iteration % 2 == 0) else "HB"
+            if start:
+                self.start_frame_id = self.drawer.frame_id
 
-        if start:
-            self.start_frame_id = self.drawer.frame_id
+            if done:
+                self._save_trajectory_summary(alg, info)
+                return
 
-        if done:
-            self._save_trajectory_summary(alg, info)
-            return
+            self.row = self._build_row_data(alg, action)
 
-        self.row = self._build_row_data(alg, action)
+            if not self.should_save_frame():
+                return
 
-        if not self.should_save_frame():
-            return
+            result = self.drawer.generate_img()
 
-        result = self.drawer.generate_img()
+            self._write_to_csv(result)
+        else:
+            if start:
+                self.start_frame_id = self.drawer.frame_id
+                result = self.save_frame()
+                result = self.drawer.generate_img()
+            elif done:
+                self._save_trajectory_summary("VLM", info)
+                self._clean_imgs()
+                return
+            else:
+                result = self.save_frame()
+                result = self.drawer.generate_img()
 
-        self._write_to_csv(result)
+    def _clean_imgs(self):
+        for frame_id in range(self.start_frame_id, self.drawer.frame_id):
+
+            img_name = f"VLM_{frame_id:06d}.png"
+            img_path = os.path.join(self.img_dir, img_name)
+
+            if os.path.exists(img_path):
+                try:
+                    os.remove(img_path)
+                except Exception as e:
+                    if rospy:
+                        rospy.logwarn(f"Failed to delete {img_name}: {e}")
 
     def should_save_frame(self):
         """
@@ -1572,7 +1602,11 @@ class JackalRos:
 
         self._append_csv(self._trajectory_path, summary)
 
-        test_dir = f"test_{'rl' if alg == 'RL' else 'hb'}"
+        if self.use_vlm == False:
+            test_dir = f"test_{'rl' if alg == 'RL' else 'hb'}"
+        else:
+            test_dir = f"test_vlm"
+
         test_path = os.path.join(os.path.dirname(self.img_dir), test_dir, f"test_results_{self.id}.csv")
         self._append_csv(test_path,
                          {k: v for k, v in summary.items() if k != "Start_frame_id" and k != "Done_frame_id"})

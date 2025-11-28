@@ -32,6 +32,7 @@ class TebBase(gym.Env):
         img_dir=None,
         pid = 0,
         WORLD_PATH=None,
+        use_vlm = False
     ):
         """Base RL env that initialize jackal simulation in Gazebo
         """
@@ -57,7 +58,7 @@ class TebBase(gym.Env):
         self.collision_reward = collision_reward
         self.smoothness_reward = smoothness_reward
 
-        self.use_RL = True
+        self.use_vlm = use_vlm
 
         self.img_dir = img_dir
         self.p_id = pid
@@ -131,13 +132,14 @@ class TebBase(gym.Env):
         """reset the environment
         """
         self.step_count = 0
+
         self.gazebo_sim.reset()
         self.jackal_ros.reset(self.param_init)
+
         self.gazebo_sim.unpause()
         self._reset_move_base()
         self.jackal_ros.set_params(self.param_init)
         obs = self._get_observation()
-        self.jackal_ros.set_params(self.param_init)
         self.gazebo_sim.pause()
 
         self._reset_reward()
@@ -147,7 +149,11 @@ class TebBase(gym.Env):
         self.collision_count = 0
         self.traj_pos = []
         self.smoothness = 0
-        return obs
+
+        if self.use_vlm == False:
+            return obs
+        else:
+            return [self.jackal_ros.state.v, self.jackal_ros.state.w]
 
     def _reset_move_base(self):
         # reset the move_base
@@ -168,45 +174,60 @@ class TebBase(gym.Env):
     def step(self, action):
         """take an action and step the environment
         """
+        if self.use_vlm == False:
+            alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
 
-        alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
+            result = self.jackal_ros.save_frame()
 
-        result = self.jackal_ros.save_frame()
+            self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
 
-        self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
-
-        if alg == "RL":
-            action_0 = action
-            action_0[6] = max(0.1, action_0[6] - self.jackal_ros.teb_fail)
-            self._take_action(action_0)
-        else:
-            if self.jackal_ros.row != None:
-
-                action_0 = [self.jackal_ros.row["max_vel_x"],
-                          self.jackal_ros.row["max_vel_x_backwards"],
-                          self.jackal_ros.row["max_vel_theta"],
-                          self.jackal_ros.row["dt_ref"],
-                          self.jackal_ros.row["min_obstacle_dist"],
-                          self.jackal_ros.row["inflation_dist"],
-                          self.jackal_ros.row["final_inflation"],
-                          ]
-
+            if alg == "RL":
+                action_0 = action
+                action_0[6] = max(0.1, action_0[6] - self.jackal_ros.teb_fail)
                 self._take_action(action_0)
             else:
-                action_0 = action
-                self._take_action(action_0)
+                if self.jackal_ros.row != None:
 
-        self.step_count += 1
+                    action_0 = [self.jackal_ros.row["max_vel_x"],
+                              self.jackal_ros.row["max_vel_x_backwards"],
+                              self.jackal_ros.row["max_vel_theta"],
+                              self.jackal_ros.row["dt_ref"],
+                              self.jackal_ros.row["min_obstacle_dist"],
+                              self.jackal_ros.row["inflation_dist"],
+                              self.jackal_ros.row["final_inflation"],
+                              ]
 
-        self.gazebo_sim.unpause()
-        obs = self._get_observation()
+                    self._take_action(action_0)
+                else:
+                    action_0 = action
+                    self._take_action(action_0)
 
-        self.jackal_ros.teb_fail = self.move_base.get_teb_fail()
+            self.step_count += 1
 
-        if self.move_base.teb_fail_count >= 30:
-            self.move_base.clear_costmap()
+            self.gazebo_sim.unpause()
+            obs = self._get_observation()
 
-        self.gazebo_sim.pause()
+            self.jackal_ros.teb_fail = self.move_base.get_teb_fail()
+
+            if self.move_base.teb_fail_count >= 30:
+                self.move_base.clear_costmap()
+
+            self.gazebo_sim.pause()
+
+
+        else:
+            self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
+
+            action_0 = action
+            self._take_action(action_0)
+
+            self.step_count += 1
+
+            self.gazebo_sim.unpause()
+
+            obs = self._get_observation()
+
+            self.gazebo_sim.pause()
 
         rew = self._get_reward()
         done, status = self._get_done()
@@ -219,7 +240,10 @@ class TebBase(gym.Env):
 
         pos = self.gazebo_sim.get_model_state().pose.position
         self.traj_pos.append((pos.x, pos.y))
-        return obs, rew, done, info
+        if self.use_vlm == False:
+            return obs, rew, done, info
+        else:
+            return [self.jackal_ros.state.v, self.jackal_ros.state.w], rew, done, info
 
     def _reset_reward(self):
         self.traj_pos = []
@@ -359,7 +383,7 @@ class TebBase(gym.Env):
         """Use predefined start and goal position for BARN dataset
         """
         self.gazebo_sim = GazeboSimulation(init_position = init_position)
-        self.jackal_ros = JackalRos(init_position = init_position, goal_position = goal_position, use_move_base = True, img_dir = self.img_dir, world_path = self.WORLD_PATH, id = self.p_id)
+        self.jackal_ros = JackalRos(init_position = init_position, goal_position = goal_position, use_move_base = True, img_dir = self.img_dir, world_path = self.WORLD_PATH, id = self.p_id, use_vlm = self.use_vlm)
         self.start_position = init_position
         self.global_goal = goal_position
         self.local_goal = [0, 0, 0]
@@ -387,6 +411,38 @@ class TebBaseLaser(TebBase):
             shape=(721,),
             dtype=np.float32
         )
+
+    def soft_close(self):
+        """只关闭 Gazebo 和 move_base，保留 roscore"""
+        rospy.logwarn("Soft closing environment (keeping roscore)...")
+
+        # 1. 先优雅地终止 move_base
+        try:
+            self.move_base_process.terminate()
+            self.move_base_process.wait(timeout=3)
+            rospy.loginfo("move_base terminated gracefully")
+        except:
+            rospy.logwarn("Force killing move_base")
+            self.move_base_process.kill()
+
+        time.sleep(1)
+
+        # 2. 再终止 Gazebo
+        try:
+            self.gazebo_process.terminate()
+            self.gazebo_process.wait(timeout=5)
+            rospy.loginfo("Gazebo terminated gracefully")
+        except:
+            rospy.logwarn("Force killing Gazebo")
+            self.gazebo_process.kill()
+
+        # 3. 确保 Gazebo 进程完全关闭
+        os.system("killall gzclient 2>/dev/null")
+        time.sleep(0.5)
+        os.system("killall gzserver 2>/dev/null")
+        time.sleep(1)
+
+        rospy.logwarn("Soft close completed")
 
     def _get_laser_scan(self):
         """Get 720 dim laser scan

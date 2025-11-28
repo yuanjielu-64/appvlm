@@ -1,0 +1,2 @@
+Test: Collision: 0, Recovery: 0.000000, Smoothness: -3.630783, Status: success, Time: 14.681 , Reward: 159.813, Opt_time: 8.558 , Nav_Metric: 0.500 , World: world_0.world
+Test: Collision: 0, Recovery: 0.000000, Smoothness: -3.317740, Status: success, Time: 14.382 , Reward: 145.504, Opt_time: 8.558 , Nav_Metric: 0.500 , World: world_0.world

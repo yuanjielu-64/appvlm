@@ -1,0 +1,3 @@
+Method,Collision,Recovery,Smoothness,Status,Time,World,optimal_time,nav_metric
+VLM,0,1.362397634550731e-07,-3.6307827134639017,success,14.681,world_0.world,8.558028082848947,0.5
+VLM,0,1.3908203907064828e-07,-3.31773964513089,success,14.382000000000001,world_0.world,8.558028082848947,0.5

@@ -1,0 +1,8 @@
+Test: Collision: 0, Recovery: 0.199736, Smoothness: -9.685429, Status: success, Time: 15.128 , Reward: 155.042, Opt_time: 8.558 , Nav_Metric: 0.500 , World: world_0.world
+Test: Collision: 0, Recovery: 0.075075, Smoothness: -8.774305, Status: success, Time: 13.328 , Reward: 157.092, Opt_time: 8.558 , Nav_Metric: 0.500 , World: world_0.world
+Test: Collision: 0, Recovery: 0.130769, Smoothness: -11.125874, Status: success, Time: 18.931 , Reward: 158.453, Opt_time: 8.202 , Nav_Metric: 0.433 , World: world_1.world
+Test: Collision: 0, Recovery: 0.268255, Smoothness: -16.153780, Status: success, Time: 26.974 , Reward: 154.826, Opt_time: 8.202 , Nav_Metric: 0.304 , World: world_1.world
+Test: Collision: 0, Recovery: 0.000000, Smoothness: -0.000030, Status: success, Time: 7.119 , Reward: 155.559, Opt_time: 8.591 , Nav_Metric: 0.500 , World: world_2.world
+Test: Collision: 0, Recovery: 0.000000, Smoothness: -0.000033, Status: success, Time: 6.249 , Reward: 142.027, Opt_time: 8.591 , Nav_Metric: 0.500 , World: world_2.world
+Test: Collision: 0, Recovery: 0.080902, Smoothness: -13.967528, Status: success, Time: 16.107 , Reward: 150.200, Opt_time: 8.952 , Nav_Metric: 0.500 , World: world_3.world
+Test: Collision: 0, Recovery: 0.328070, Smoothness: -18.495970, Status: success, Time: 24.547 , Reward: 154.613, Opt_time: 8.952 , Nav_Metric: 0.365 , World: world_3.world

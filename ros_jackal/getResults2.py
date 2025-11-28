@@ -12,6 +12,7 @@ import numpy as np
 from os.path import join, exists
 import random
 
+
 def path_coord_to_gazebo_coord(x, y):
     """Convert path coordinates to Gazebo coordinates"""
     RADIUS = 0.075
@@ -26,18 +27,19 @@ def path_coord_to_gazebo_coord(x, y):
 
 def compute_distance(p1, p2):
     """Calculate Euclidean distance between two points"""
-    return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
+    return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+
 
 def calculate_navigation_metric(world_id, actual_time, success, base_path="src/barn_challenge_lu"):
     """
     Calculate navigation metric for a given world and run
-    
+
     Args:
         world_id: World identifier (0-299: static, 300-359: dynamic)
         actual_time: Actual completion time in seconds
         success: Whether the navigation was successful (1/0)
         base_path: Base path to BARN challenge code
-        
+
     Returns:
         nav_metric: Navigation score
         optimal_time: Optimal completion time
@@ -45,7 +47,7 @@ def calculate_navigation_metric(world_id, actual_time, success, base_path="src/b
     """
     # Set environment-specific coordinate systems
     if world_id < 300:  # Static environments (0-299)
-        INIT_POSITION = [-2, 3, 1.57]
+        INIT_POSITION = [-2.25, 3, 1.57]
         GOAL_POSITION = [0, GOAL]
     elif world_id < 360:  # Dynamic environments (300-359)
         INIT_POSITION = [11, 0, 3.14]
@@ -56,7 +58,7 @@ def calculate_navigation_metric(world_id, actual_time, success, base_path="src/b
     if world_id >= 300:  # DynaBARN environment without planned path
         path_length = abs(GOAL_POSITION[0] - INIT_POSITION[0])
     else:
-        path_file_name = join("jackal_helper/worlds/BARN1/path_files", f"path_{world_id}.npy")
+        path_file_name = join("jackal_helper/worlds/BARN/path_files", f"path_{world_id}.npy")
 
         if not exists(path_file_name):
             # Use default distance if path file doesn't exist
@@ -67,7 +69,8 @@ def calculate_navigation_metric(world_id, actual_time, success, base_path="src/b
                 path_array = [path_coord_to_gazebo_coord(*p) for p in path_array]
                 path_array = np.insert(path_array, 0, (INIT_POSITION[0], INIT_POSITION[1]), axis=0)
                 path_array = np.insert(path_array, len(path_array),
-                                     (INIT_POSITION[0] + GOAL_POSITION[0], INIT_POSITION[1] + GOAL_POSITION[1]), axis=0)
+                                       (INIT_POSITION[0] + GOAL_POSITION[0], INIT_POSITION[1] + GOAL_POSITION[1]),
+                                       axis=0)
                 path_length = 0
                 for p1, p2 in zip(path_array[:-1], path_array[1:]):
                     path_length += compute_distance(p1, p2)
@@ -85,7 +88,7 @@ def calculate_navigation_metric(world_id, actual_time, success, base_path="src/b
 def collect_test_log_data(log_file_path, top_n_per_env=20):
     """
     Collect data from test log files
-    
+
     Args:
         log_file_path: Path to the test log file
         top_n_per_env: Number of top results per environment to analyze
@@ -128,7 +131,7 @@ def collect_test_log_data(log_file_path, top_n_per_env=20):
                     record = {
                         'world_id': world_id,
                         'Time': actual_time,
-                        'Success': status,
+                        'Status': status,
                         'nav_metric': nav_metric,
                         'optimal_time': optimal_time
                     }
@@ -229,12 +232,12 @@ def collect_baseline_data(baseline_dir, top_n_per_env=20, time_threshold=50):
             df = df.head(top_n_per_env)
 
             # Check if required columns exist
-            if 'Time' not in df.columns or 'Success' not in df.columns:
+            if 'Time' not in df.columns or 'Status' not in df.columns:
                 missing_cols = []
                 if 'Time' not in df.columns:
                     missing_cols.append('Time')
-                if 'Success' not in df.columns:
-                    missing_cols.append('Success')
+                if 'Status' not in df.columns:
+                    missing_cols.append('Status')
                 print(f"Warning: Missing columns in {csv_file}: {missing_cols}")
                 continue
 
@@ -258,7 +261,7 @@ def collect_baseline_data(baseline_dir, top_n_per_env=20, time_threshold=50):
 
             # Add world_id column and collect raw data
             df['world_id'] = world_id
-            all_data.append(df[['world_id', 'Time', 'nav_metric', 'optimal_time', 'Success']].copy())
+            all_data.append(df[['world_id', 'Time', 'Status']].copy())
             processed_files[world_id] = csv_file
 
         except Exception as e:
@@ -288,22 +291,21 @@ def collect_baseline_data(baseline_dir, top_n_per_env=20, time_threshold=50):
 
 
 def calculate_environment_statistics(combined_df, processed_files, use_existing_nav_metric=False):
-
     print("📊 Computing navigation statistics...")
 
     def calculate_nav_metric_vectorized(row):
         """Vectorized function to calculate navigation metrics for each row"""
         # success = 1 if row['Status'] == 'success' else 0
 
-        success = 1 if (row['Success'] == True ) else 0
+        success = 1 if (row['Status'] == 'success') else 0
 
         nav_metric, optimal_time, path_length = calculate_navigation_metric(
             row['world_id'], row['Time'], success
         )
 
         return pd.Series({
-            # 'nav_metric': nav_metric,
-            # 'optimal_time': optimal_time,
+            'nav_metric': nav_metric,
+            'optimal_time': optimal_time,
             'path_length': path_length,
             'success': success
         })
@@ -315,16 +317,16 @@ def calculate_environment_statistics(combined_df, processed_files, use_existing_
     # Save raw results in BARN challenge format
     suffix = f"_{GOAL}"
     output_file = f"results/results{suffix}.txt"
-    
+
     print(f"💾 Saving raw results to: {output_file}")
     with open(output_file, "w") as f:
         # Write header comment
 
         for _, row in combined_df.iterrows():
             timeout = 1 if row['Time'] >= 100 else 0
-            collided = 1 if row['Success'] == True else 0
+            collided = 1 if row['Status'] == 'collision' else 0
             f.write(f"{int(row['world_id'])} {int(row['success'])} {collided} {timeout} "
-                   f"{row['Time']:.4f} {row['optimal_time']:.4f} {row['nav_metric']:.4f}\n")
+                    f"{row['Time']:.4f} {row['optimal_time']:.4f} {row['nav_metric']:.4f}\n")
 
     # Calculate statistics grouped by world_id
     results = []
@@ -345,14 +347,14 @@ def calculate_environment_statistics(combined_df, processed_files, use_existing_
             trimmed_processed_times = sorted_processed_times[5:-5]  # Remove first 5 and last 5
             avg_time = np.mean(trimmed_processed_times)
         else:
-            avg_time = np.mean(processed_times) # Use all data if insufficient samples
+            avg_time = np.mean(processed_times)  # Use all data if insufficient samples
 
         # avg_time = group['Time'].mean()
         avg_nav_metric = group['nav_metric'].mean()
         avg_optimal_time = group['optimal_time'].mean()
         avg_path_length = group['path_length'].mean()
 
-        status_counts = group['Success'].value_counts()
+        status_counts = group['Status'].value_counts()
         status_stats = {}
         for status, count in status_counts.items():
             status_stats[status] = {
@@ -405,7 +407,8 @@ def analyze_baseline_results(baseline_dir, top_n_per_env):
     # Print sorted results
     print(f"\nEnvironment difficulty ranking (sorted by average time from high to low):")
     print("-" * 120)
-    print(f"{'Rank':<4} {'World ID':<8} {'Avg Time':<10} {'Nav Score':<10} {'Success Rate':<12} {'Test Count':<10} {'Success Distribution':<50}")
+    print(
+        f"{'Rank':<4} {'World ID':<8} {'Avg Time':<10} {'Nav Score':<10} {'Success Rate':<12} {'Test Count':<10} {'Status Distribution':<50}")
     print("-" * 120)
 
     for rank, result in enumerate(sorted_results[:20], 1):  # Show top 20 most difficult
@@ -429,6 +432,7 @@ def analyze_baseline_results(baseline_dir, top_n_per_env):
             f"{rank:<4} {result['world_id']:<8} {result['avg_time']:<9.3f} {result['avg_nav_metric']:<9.3f} {result['success_rate']:<11.1f}% {result['num_episodes']:<10} {status_str:<50}")
 
     return sorted_results
+
 
 def save_results(sorted_results, output_file="hard_environments.csv"):
     """
@@ -495,7 +499,6 @@ def get_hardest_environments(sorted_results, top_n=50):
 
 
 def analyze_status_distribution(sorted_results, top_n_per_env=20):
-
     print("\n" + "=" * 80)
     print("Overall Status Distribution Statistics:")
     print("=" * 80)
@@ -541,8 +544,10 @@ def analyze_status_distribution(sorted_results, top_n_per_env=20):
 
     # Sort by navigation score to find highest and lowest
     sorted_by_nav = sorted(sorted_results, key=lambda x: x['avg_nav_metric'], reverse=True)
-    print(f"Highest average navigation score: {sorted_by_nav[0]['avg_nav_metric']:.3f} (World {sorted_by_nav[0]['world_id']})")
-    print(f"Lowest average navigation score: {sorted_by_nav[-1]['avg_nav_metric']:.3f} (World {sorted_by_nav[-1]['world_id']})")
+    print(
+        f"Highest average navigation score: {sorted_by_nav[0]['avg_nav_metric']:.3f} (World {sorted_by_nav[0]['world_id']})")
+    print(
+        f"Lowest average navigation score: {sorted_by_nav[-1]['avg_nav_metric']:.3f} (World {sorted_by_nav[-1]['world_id']})")
 
     # Print overall distribution
     print(f"\nTotal test episodes: {total_episodes}")
@@ -658,10 +663,10 @@ if __name__ == "__main__":
     # ============================================================================
     # CONFIGURATION
     # ============================================================================
-    baseline_dir = "data/dwa_hb/"    # Directory containing baseline CSV files
-    top_n_per_env = 20                  # Number of episodes per environment to analyze
-    GOAL = 10                           # Goal position Y coordinate (10 or 15)
-    
+    baseline_dir = "data/teb_hb/"  # Directory containing baseline CSV files
+    top_n_per_env = 20  # Number of episodes per environment to analyze
+    GOAL = 15  # Goal position Y coordinate (10 or 15)
+
     # ============================================================================
     # MAIN ANALYSIS
     # ============================================================================
@@ -670,14 +675,16 @@ if __name__ == "__main__":
     print(f"📊 Episodes per environment: {top_n_per_env}")
     print(f"🎯 Goal configuration: {GOAL}")
     print("=" * 80)
-    
+
     # Analyze baseline results
     sorted_results = analyze_baseline_results(baseline_dir, top_n_per_env)
-    
+
     # Generate detailed statistics
     analyze_status_distribution(sorted_results, top_n_per_env)
 
-    target_envs = [163, 278, 58, 275, 123, 282, 294, 19, 283, 264, 245, 176, 271, 299, 225, 197, 111, 284, 99, 2, 209, 243, 182, 219, 260, 276, 285, 265, 117, 288, 255, 280, 287, 168, 138, 231, 180, 207, 222, 214, 273, 281, 254, 137, 85, 216, 292, 262, 199, 167]
+    target_envs = [163, 278, 58, 275, 123, 282, 294, 19, 283, 264, 245, 176, 271, 299, 225, 197, 111, 284, 99, 2, 209,
+                   243, 182, 219, 260, 276, 285, 265, 117, 288, 255, 280, 287, 168, 138, 231, 180, 207, 222, 214, 273,
+                   281, 254, 137, 85, 216, 292, 262, 199, 167]
 
     analyze_specific_environments(sorted_results, target_envs)
 
@@ -685,16 +692,16 @@ if __name__ == "__main__":
     # SAVE RESULTS
     # ============================================================================
     suffix = f"_{GOAL}"
-    
+
     # Save comprehensive results to CSV
     save_results(sorted_results, f"results/hard_environments{suffix}.csv")
-    
+
     # Get and save hardest environments
     hardest_50 = get_hardest_environments(sorted_results, 50)
-    
+
     with open(f"results/hardest_environments{suffix}.txt", "w") as f:
         for world_id in hardest_50:
             f.write(f"{world_id}, ")
-    
+
     print(f"✅ Analysis complete! Results saved with suffix '{suffix}'")
     print(f"📄 Hardest 50 environments saved to: hardest_environments{suffix}.txt")
