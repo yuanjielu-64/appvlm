@@ -91,8 +91,7 @@ class JackalBase(gym.Env):
         self.move_base_process = subprocess.Popen(
             ['roslaunch', launch_file, 'base_local_planner:=' + base_local_planner])
 
-        # 等待move_base启动和costmap初始化
-        time.sleep(3)
+        time.sleep(5)  # Additional buffer time for costmap initialization
 
         self.move_base = ddp_MoveBase(goal_position=goal_position, base_local_planner=base_local_planner)
 
@@ -136,10 +135,9 @@ class JackalBase(gym.Env):
 
         time.sleep(5)  # sleep to wait until the gazebo being created
 
-        # initialize the node for gym env (只初始化一次)
-        if not rospy.core.is_initialized():
-            rospy.init_node('gym', anonymous=True, log_level=rospy.FATAL)
-            rospy.set_param('/use_sim_time', True)
+        # Initialize ROS node (soft_close() should have reset the state)
+        rospy.init_node('gym', anonymous=True, log_level=rospy.FATAL)
+        rospy.set_param('/use_sim_time', True)
 
     def set_start_goal_BARN(self, init_position, goal_position):
         """Use predefined start and goal position for BARN dataset
@@ -190,7 +188,7 @@ class JackalBase(gym.Env):
         if self.use_vlm == False:
             alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
 
-            result = self.jackal_ros.save_frame()
+            self.jackal_ros.save_frame()
 
             self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
 
@@ -378,36 +376,12 @@ class JackalBase(gym.Env):
         self.move_base.clear_costmap()
 
     def soft_close(self):
-        """只关闭 Gazebo 和 move_base，保留 roscore"""
-        rospy.logwarn("Soft closing environment (keeping roscore)...")
 
-        # 1. 先优雅地终止 move_base
-        try:
-            self.move_base_process.terminate()
-            self.move_base_process.wait(timeout=3)
-            rospy.loginfo("move_base terminated gracefully")
-        except:
-            rospy.logwarn("Force killing move_base")
-            self.move_base_process.kill()
+        self.gazebo_process.terminate()
+        self.gazebo_process.wait()
 
-        time.sleep(1)
-
-        # 2. 再终止 Gazebo
-        try:
-            self.gazebo_process.terminate()
-            self.gazebo_process.wait(timeout=5)
-            rospy.loginfo("Gazebo terminated gracefully")
-        except:
-            rospy.logwarn("Force killing Gazebo")
-            self.gazebo_process.kill()
-
-        # 3. 确保 Gazebo 进程完全关闭
-        os.system("killall gzclient 2>/dev/null")
-        time.sleep(0.5)
-        os.system("killall gzserver 2>/dev/null")
-        time.sleep(1)
-
-        rospy.logwarn("Soft close completed")
+        self.move_base_process.terminate()
+        self.move_base_process.wait()
 
     def close(self):
         # These will make sure all the ros processes being killed
@@ -415,6 +389,15 @@ class JackalBase(gym.Env):
         os.system("killall -9 gzclient")
         os.system("killall -9 gzserver")
         os.system("killall -9 roscore")
+
+        import rospy.impl.registration
+        rospy.core._shutdown_flag = False
+        rospy.core._in_shutdown = False
+        rospy.core.is_shutdown_requested = lambda: False
+        rospy.core.is_initialized = lambda: False
+        rospy.impl.registration._init_node_args = None
+
+        print("Soft close completed")
 
     def _get_pos_psi(self):
         pose = self.gazebo_sim.get_model_state().pose

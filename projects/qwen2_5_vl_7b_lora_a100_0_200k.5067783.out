@@ -1,0 +1,547 @@
+Python Path:
+/home/bwang25/miniforge/envs/lmms-finetune-qwen/bin/python
+Python 3.10.19
+/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/utils/hub.py:106: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[2025-11-27 17:29:49,464] [INFO] [real_accelerator.py:203:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+Warning: The cache directory for DeepSpeed Triton autotune, /home/bwang25/.triton/autotune, appears to be on an NFS system. While this is generally acceptable, if you experience slowdowns or hanging when DeepSpeed exits, it is recommended to set the TRITON_CACHE_DIR environment variable to a non-NFS path.
+[2025-11-27 17:29:51,902] [INFO] [comm.py:652:init_distributed] cdb=None
+[2025-11-27 17:29:51,902] [INFO] [comm.py:683:init_distributed] Initializing TorchBackend in DeepSpeed with backend nccl
+Loading model, tokenizer, processor...
+[2025-11-27 17:30:43,113] [INFO] [config.py:733:__init__] Config mesh_device None world_size = 1
+[2025-11-27 17:30:44,098] [INFO] [partition_parameters.py:348:__exit__] finished initializing model - num_params = 729, num_elems = 8.29B
+Loading checkpoint shards:   0%|          | 0/5 [00:00<?, ?it/s]Loading checkpoint shards:  20%|██        | 1/5 [00:06<00:27,  6.83s/it]Loading checkpoint shards:  40%|████      | 2/5 [00:13<00:20,  6.74s/it]Loading checkpoint shards:  60%|██████    | 3/5 [00:19<00:12,  6.26s/it]Loading checkpoint shards:  80%|████████  | 4/5 [00:26<00:06,  6.54s/it]Loading checkpoint shards: 100%|██████████| 5/5 [00:27<00:00,  4.79s/it]Loading checkpoint shards: 100%|██████████| 5/5 [00:27<00:00,  5.57s/it]
+Using a slow image processor as `use_fast` is unset and a slow processor was saved with this model. `use_fast=True` will be the default behavior in v4.48, even if the model was saved with a slow processor. This will result in minor differences in outputs. You'll still be able to use a slow processor with `use_fast=False`.
+Vision encoder is freezed... including:
+	visual.patch_embed
+	visual.rotary_pos_emb
+	visual.blocks
+Vision projector is freezed... including:
+	visual.merger
+LoRA for LLM enabled...
+Trainable parameters:
+	base_model.model.model.layers.0.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.0.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.0.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.0.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.0.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.0.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.0.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.0.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.0.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.0.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.0.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.0.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.0.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.0.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.1.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.1.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.1.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.1.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.1.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.1.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.1.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.1.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.1.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.1.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.1.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.1.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.1.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.1.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.2.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.2.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.2.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.2.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.2.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.2.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.2.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.2.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.2.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.2.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.2.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.2.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.2.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.2.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.3.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.3.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.3.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.3.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.3.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.3.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.3.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.3.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.3.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.3.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.3.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.3.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.3.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.3.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.4.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.4.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.4.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.4.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.4.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.4.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.4.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.4.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.4.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.4.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.4.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.4.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.4.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.4.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.5.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.5.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.5.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.5.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.5.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.5.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.5.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.5.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.5.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.5.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.5.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.5.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.5.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.5.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.6.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.6.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.6.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.6.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.6.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.6.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.6.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.6.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.6.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.6.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.6.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.6.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.6.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.6.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.7.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.7.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.7.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.7.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.7.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.7.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.7.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.7.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.7.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.7.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.7.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.7.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.7.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.7.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.8.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.8.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.8.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.8.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.8.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.8.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.8.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.8.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.8.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.8.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.8.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.8.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.8.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.8.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.9.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.9.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.9.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.9.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.9.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.9.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.9.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.9.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.9.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.9.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.9.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.9.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.9.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.9.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.10.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.10.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.10.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.10.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.10.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.10.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.10.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.10.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.10.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.10.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.10.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.10.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.10.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.10.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.11.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.11.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.11.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.11.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.11.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.11.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.11.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.11.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.11.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.11.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.11.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.11.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.11.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.11.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.12.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.12.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.12.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.12.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.12.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.12.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.12.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.12.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.12.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.12.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.12.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.12.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.12.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.12.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.13.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.13.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.13.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.13.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.13.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.13.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.13.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.13.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.13.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.13.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.13.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.13.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.13.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.13.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.14.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.14.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.14.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.14.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.14.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.14.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.14.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.14.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.14.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.14.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.14.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.14.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.14.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.14.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.15.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.15.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.15.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.15.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.15.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.15.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.15.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.15.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.15.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.15.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.15.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.15.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.15.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.15.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.16.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.16.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.16.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.16.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.16.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.16.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.16.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.16.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.16.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.16.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.16.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.16.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.16.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.16.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.17.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.17.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.17.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.17.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.17.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.17.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.17.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.17.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.17.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.17.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.17.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.17.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.17.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.17.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.18.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.18.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.18.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.18.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.18.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.18.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.18.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.18.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.18.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.18.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.18.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.18.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.18.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.18.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.19.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.19.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.19.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.19.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.19.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.19.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.19.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.19.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.19.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.19.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.19.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.19.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.19.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.19.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.20.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.20.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.20.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.20.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.20.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.20.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.20.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.20.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.20.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.20.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.20.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.20.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.20.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.20.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.21.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.21.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.21.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.21.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.21.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.21.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.21.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.21.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.21.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.21.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.21.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.21.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.21.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.21.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.22.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.22.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.22.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.22.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.22.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.22.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.22.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.22.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.22.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.22.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.22.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.22.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.22.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.22.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.23.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.23.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.23.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.23.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.23.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.23.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.23.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.23.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.23.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.23.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.23.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.23.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.23.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.23.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.24.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.24.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.24.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.24.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.24.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.24.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.24.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.24.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.24.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.24.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.24.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.24.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.24.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.24.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.25.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.25.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.25.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.25.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.25.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.25.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.25.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.25.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.25.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.25.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.25.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.25.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.25.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.25.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.26.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.26.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.26.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.26.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.26.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.26.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.26.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.26.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.26.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.26.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.26.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.26.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.26.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.26.mlp.down_proj.lora_B.default.weight
+	base_model.model.model.layers.27.self_attn.q_proj.lora_A.default.weight
+	base_model.model.model.layers.27.self_attn.q_proj.lora_B.default.weight
+	base_model.model.model.layers.27.self_attn.k_proj.lora_A.default.weight
+	base_model.model.model.layers.27.self_attn.k_proj.lora_B.default.weight
+	base_model.model.model.layers.27.self_attn.v_proj.lora_A.default.weight
+	base_model.model.model.layers.27.self_attn.v_proj.lora_B.default.weight
+	base_model.model.model.layers.27.self_attn.o_proj.lora_A.default.weight
+	base_model.model.model.layers.27.self_attn.o_proj.lora_B.default.weight
+	base_model.model.model.layers.27.mlp.gate_proj.lora_A.default.weight
+	base_model.model.model.layers.27.mlp.gate_proj.lora_B.default.weight
+	base_model.model.model.layers.27.mlp.up_proj.lora_A.default.weight
+	base_model.model.model.layers.27.mlp.up_proj.lora_B.default.weight
+	base_model.model.model.layers.27.mlp.down_proj.lora_A.default.weight
+	base_model.model.model.layers.27.mlp.down_proj.lora_B.default.weight
+Loading data...
+Detected kernel version 4.18.0, which is below the recommended minimum of 5.5.0; this can cause the process to hang. It is recommended to upgrade the kernel to the minimum version or higher.
+No label_names provided for model class `PeftModelForCausalLM`. Since `PeftModel` hides base models input arguments, if label_names is not given, label_names can't be set automatically within `Trainer`. Note that empty label_names list will be used instead.
+/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/utils/data/dataloader.py:627: UserWarning: This DataLoader will create 4 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(
+Parameter Offload: Total persistent parameters: 1766400 in 424 params
+/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4876: UserWarning: barrier(): using the device under current context. You can specify `device_id` in `init_process_group` to mute this warning.
+  warnings.warn(  # warn only once
+wandb: Currently logged in as: beichenwang2000 (beichenwang2000-george-mason-university) to https://api.wandb.ai. Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.23.0
+wandb: Run data is saved locally in /scratch/bwang25/wandb/wandb/run-20251127_173126-a5z65voy
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run qwen2.5-vl-7b-instruct_lora-True_0_200k
+wandb: ⭐️ View project at https://wandb.ai/beichenwang2000-george-mason-university/lmms-ft
+wandb: 🚀 View run at https://wandb.ai/beichenwang2000-george-mason-university/lmms-ft/runs/a5z65voy
+  0%|          | 0/12500 [00:00<?, ?it/s]/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/utils/data/dataloader.py:627: UserWarning: This DataLoader will create 4 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(
+/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/utils/checkpoint.py:85: UserWarning: None of the inputs have requires_grad=True. Gradients will be None
+  warnings.warn(
+`use_cache=True` is incompatible with gradient checkpointing. Setting `use_cache=False`...
+Traceback (most recent call last):
+  File "/home/bwang25/projects/lmms-finetune-qwen/train.py", line 202, in <module>
+    train()
+  File "/home/bwang25/projects/lmms-finetune-qwen/train.py", line 195, in train
+    trainer.train()
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/trainer.py", line 2241, in train
+    return inner_training_loop(
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/trainer.py", line 2548, in _inner_training_loop
+    tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/trainer.py", line 3698, in training_step
+    loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/trainer.py", line 3759, in compute_loss
+    outputs = model(**inputs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/deepspeed/utils/nvtx.py", line 18, in wrapped_fn
+    ret_val = func(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/deepspeed/runtime/engine.py", line 1899, in forward
+    loss = self.module(*inputs, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1881, in _call_impl
+    return inner()
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1829, in inner
+    result = forward_call(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/peft/peft_model.py", line 1923, in forward
+    return self.base_model(
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1881, in _call_impl
+    return inner()
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1829, in inner
+    result = forward_call(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/peft/tuners/tuners_utils.py", line 308, in forward
+    return self.model.forward(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/models/qwen2_5_vl/modeling_qwen2_5_vl.py", line 1882, in forward
+    logits = logits.float()
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 37.12 GiB. GPU 0 has a total capacity of 79.25 GiB of which 12.99 GiB is free. Including non-PyTorch memory, this process has 66.25 GiB memory in use. Of the allocated memory 49.45 GiB is allocated by PyTorch, and 15.87 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[rank0]: Traceback (most recent call last):
+[rank0]:   File "/home/bwang25/projects/lmms-finetune-qwen/train.py", line 202, in <module>
+[rank0]:     train()
+[rank0]:   File "/home/bwang25/projects/lmms-finetune-qwen/train.py", line 195, in train
+[rank0]:     trainer.train()
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/trainer.py", line 2241, in train
+[rank0]:     return inner_training_loop(
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/trainer.py", line 2548, in _inner_training_loop
+[rank0]:     tr_loss_step = self.training_step(model, inputs, num_items_in_batch)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/trainer.py", line 3698, in training_step
+[rank0]:     loss = self.compute_loss(model, inputs, num_items_in_batch=num_items_in_batch)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/trainer.py", line 3759, in compute_loss
+[rank0]:     outputs = model(**inputs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1786, in _call_impl
+[rank0]:     return forward_call(*args, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/deepspeed/utils/nvtx.py", line 18, in wrapped_fn
+[rank0]:     ret_val = func(*args, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/deepspeed/runtime/engine.py", line 1899, in forward
+[rank0]:     loss = self.module(*inputs, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1881, in _call_impl
+[rank0]:     return inner()
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1829, in inner
+[rank0]:     result = forward_call(*args, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/peft/peft_model.py", line 1923, in forward
+[rank0]:     return self.base_model(
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1775, in _wrapped_call_impl
+[rank0]:     return self._call_impl(*args, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1881, in _call_impl
+[rank0]:     return inner()
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/nn/modules/module.py", line 1829, in inner
+[rank0]:     result = forward_call(*args, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/peft/tuners/tuners_utils.py", line 308, in forward
+[rank0]:     return self.model.forward(*args, **kwargs)
+[rank0]:   File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/models/qwen2_5_vl/modeling_qwen2_5_vl.py", line 1882, in forward
+[rank0]:     logits = logits.float()
+[rank0]: torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 37.12 GiB. GPU 0 has a total capacity of 79.25 GiB of which 12.99 GiB is free. Including non-PyTorch memory, this process has 66.25 GiB memory in use. Of the allocated memory 49.45 GiB is allocated by PyTorch, and 15.87 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+[1;34mwandb[0m: 
+[1;34mwandb[0m: 🚀 View run [33mqwen2.5-vl-7b-instruct_lora-True_0_200k[0m at: [34m[0m
+[1;34mwandb[0m: Find logs at: [1;35m../../../../scratch/bwang25/wandb/wandb/run-20251127_173126-a5z65voy/logs[0m
+E1127 17:31:52.628000 2572329 site-packages/torch/distributed/elastic/multiprocessing/api.py:882] failed (exitcode: 1) local_rank: 0 (pid: 2572372) of binary: /home/bwang25/miniforge/envs/lmms-finetune-qwen/bin/python
+Traceback (most recent call last):
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/bin/torchrun", line 7, in <module>
+    sys.exit(main())
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 357, in wrapper
+    return f(*args, **kwargs)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/distributed/run.py", line 936, in main
+    run(args)
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/distributed/run.py", line 927, in run
+    elastic_launch(
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 156, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/torch/distributed/launcher/api.py", line 293, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+train.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2025-11-27_17:31:52
+  host      : gpu011.orc.gmu.edu
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 2572372)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================

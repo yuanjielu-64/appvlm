@@ -1,0 +1,11 @@
+Python Path:
+/home/bwang25/miniforge/envs/lmms-finetune-qwen/bin/python
+Python 3.10.19
+/home/bwang25/miniforge/envs/lmms-finetune-qwen/lib/python3.10/site-packages/transformers/utils/hub.py:106: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[2025-11-27 17:28:23,807] [INFO] [real_accelerator.py:203:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+Warning: The cache directory for DeepSpeed Triton autotune, /home/bwang25/.triton/autotune, appears to be on an NFS system. While this is generally acceptable, if you experience slowdowns or hanging when DeepSpeed exits, it is recommended to set the TRITON_CACHE_DIR environment variable to a non-NFS path.
+[2025-11-27 17:28:26,647] [INFO] [comm.py:652:init_distributed] cdb=None
+[2025-11-27 17:28:26,648] [INFO] [comm.py:683:init_distributed] Initializing TorchBackend in DeepSpeed with backend nccl
+Loading model, tokenizer, processor...
+slurmstepd-gpu011: error: *** JOB 5067780 ON gpu011 CANCELLED AT 2025-11-27T17:28:27 ***

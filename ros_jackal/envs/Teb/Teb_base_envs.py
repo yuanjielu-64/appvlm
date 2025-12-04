@@ -106,7 +106,7 @@ class TebBase(gym.Env):
 
         time.sleep(10)  # sleep to wait until the gazebo being created
 
-        # initialize the node for gym env
+        # Initialize ROS node (soft_close() should have reset the state)
         rospy.init_node('gym', anonymous=True, log_level=rospy.FATAL)
         rospy.set_param('/use_sim_time', True)
 
@@ -117,8 +117,7 @@ class TebBase(gym.Env):
         self.move_base_process = subprocess.Popen(
             ['roslaunch', launch_file, 'base_local_planner:=' + base_local_planner])
 
-        # 等待move_base启动和costmap初始化
-        time.sleep(3)
+        time.sleep(5)  # Additional buffer time for costmap initialization
 
         self.move_base = Teb_move_base(goal_position=goal_position, base_local_planner=base_local_planner)
 
@@ -177,13 +176,12 @@ class TebBase(gym.Env):
         if self.use_vlm == False:
             alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
 
-            result = self.jackal_ros.save_frame()
+            self.jackal_ros.save_frame()
 
             self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
 
             if alg == "RL":
                 action_0 = action
-                action_0[6] = max(0.1, action_0[6] - self.jackal_ros.teb_fail)
                 self._take_action(action_0)
             else:
                 if self.jackal_ros.row != None:
@@ -207,13 +205,7 @@ class TebBase(gym.Env):
             self.gazebo_sim.unpause()
             obs = self._get_observation()
 
-            self.jackal_ros.teb_fail = self.move_base.get_teb_fail()
-
-            if self.move_base.teb_fail_count >= 30:
-                self.move_base.clear_costmap()
-
             self.gazebo_sim.pause()
-
 
         else:
             self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
@@ -414,9 +406,10 @@ class TebBaseLaser(TebBase):
 
     def soft_close(self):
         """只关闭 Gazebo 和 move_base，保留 roscore"""
+        import rospy.impl.registration
+
         rospy.logwarn("Soft closing environment (keeping roscore)...")
 
-        # 1. 先优雅地终止 move_base
         try:
             self.move_base_process.terminate()
             self.move_base_process.wait(timeout=3)
@@ -428,19 +421,32 @@ class TebBaseLaser(TebBase):
         time.sleep(1)
 
         # 2. 再终止 Gazebo
-        try:
-            self.gazebo_process.terminate()
-            self.gazebo_process.wait(timeout=5)
-            rospy.loginfo("Gazebo terminated gracefully")
-        except:
-            rospy.logwarn("Force killing Gazebo")
-            self.gazebo_process.kill()
 
-        # 3. 确保 Gazebo 进程完全关闭
-        os.system("killall gzclient 2>/dev/null")
+        self.gazebo_process.terminate()
+        self.gazebo_process.wait()
+        rospy.loginfo("Gazebo terminated gracefully")
+
+        # 3. Shutdown ROS node and reset initialization state
+        if rospy.core.is_initialized():
+            rospy.signal_shutdown('Environment closed')
+            time.sleep(0.5)
+            # Reset internal state to allow fresh reinitialization
+            rospy.core._shutdown_flag = False
+            rospy.core._in_shutdown = False
+            rospy.core.is_shutdown_requested = lambda: False
+            # Critical: reset the initialized flag
+            rospy.core.is_initialized = lambda: False
+            rospy.impl.registration._init_node_args = None
+
+        # # 3. 强力清理所有Gazebo和相关进程
+        rospy.logwarn("Force cleaning all Gazebo processes...")
+        os.system("pkill -9 -f gzclient")
         time.sleep(0.5)
-        os.system("killall gzserver 2>/dev/null")
-        time.sleep(1)
+        os.system("pkill -9 -f gzserver")
+        time.sleep(0.5)
+        os.system("pkill -9 -f 'roslaunch.*gazebo'")
+        os.system("pkill -9 -f move_base")
+        time.sleep(2)
 
         rospy.logwarn("Soft close completed")
 

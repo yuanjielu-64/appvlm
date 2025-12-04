@@ -9,6 +9,7 @@ import pandas as pd
 import tf
 import os
 import copy
+from enum import Enum
 
 from scipy.signal import savgol_filter
 
@@ -42,6 +43,12 @@ PLANNER_PARAMS = {
     "DDP": ["iterations", "horizon", "max_vel_x",
             "regularization", "inflation"]
 }
+
+class RobotMode(Enum):
+    BASELINE_RL_HB = "rl_hb"
+    BASELINE_CHATGPT = "chatgpt"
+    NORMAL = "normal"
+    RECOVERY = "recovery_behavior"
 
 @dataclass
 class Cfg:
@@ -87,11 +94,11 @@ class Cfg:
     backtrack_alpha: float = 0.6
     vel_near_zero: float = 0.03
 
-# ================== 2) 轻量状态 ==================
 @dataclass
 class RobotState:
     x: float = 0.0; y: float = 0.0; z: float = 0.0
     theta: float = 0.0; v: float = 0.0; w: float = 0.0
+    mode: RobotMode = RobotMode.NORMAL
 
     def get_robot_state(self):
         return np.array([self.x, self.y, self.theta, self.v, self.w])
@@ -169,30 +176,25 @@ class SafetyAssessor:
         return self._dist_to_velocity(safety_d)
 
     def assessAngular(self, state):
-        # ---- 常量（可移到 Cfg）----
-        v_max = 1.5  # 期望线速度上限（用于线性衰减）
-        a_lat_max = 1.0  # 允许的横向加速度上限 (m/s^2)
-        omega0 = 2.0  # 低速时的基础角速上限 (rad/s)
-        v_floor = 0.2  # 物理约束计算的分母下限，避免 v->0 发散
+        v_max = 1.5
+        a_lat_max = 1.0
+        omega0 = 2.0
+        v_floor = 0.2
         eps = 1e-6
 
-        # ---- 读入并规范化 ----
-        v = float(abs(state.v))  # 物理约束用绝对速度
-        # 线性退火上限：速度越高，允许角速度越小
+        v = float(abs(state.v))
+
         cap_linear = omega0 * max(0.0, 1.0 - v / max(v_max, eps))
-        # 物理约束上限（防止发散，分母加下限）
+
         cap_phys = a_lat_max / max(v, v_floor)
 
-        # ---- 合成+限幅 ----
         cap = min(cap_linear, cap_phys)
-        # 强制非负
+
         if not np.isfinite(cap) or cap < 0.0:
-            cap = omega0  # 回退
-        # 配置总上限（你在 Cfg 里有 omega_max=2.0）
+            cap = omega0
+
         cap = float(np.clip(cap, 0.0, getattr(self.cfg, "omega_max", omega0)))
 
-        # ---- 可选：平滑，减少抖动 ----
-        # self._cap_ema 可在 __init__ 里初始化为 None
         alpha = 0.3
         if getattr(self, "_cap_ema", None) is None:
             self._cap_ema = cap
@@ -200,7 +202,6 @@ class SafetyAssessor:
             self._cap_ema = alpha * cap + (1 - alpha) * self._cap_ema
         cap = self._cap_ema
 
-        # 最终返回对称区间（确保 min<=max）
         return (-cap, cap)
 
     def reset(self):
@@ -285,7 +286,6 @@ class FrameDrawer:
         """
         c = self.cfg
 
-        # 旋转矩阵: odom -> robot body
         cos_y = math.cos(-robot_yaw)
         sin_y = math.sin(-robot_yaw)
 
@@ -378,7 +378,6 @@ class FrameDrawer:
         return True
 
     def generate_img(self):
-
         if self.img is not None:
             cv2.imwrite(os.path.join(self.img_dir, f"{self.alg}_{self.frame_id:06d}.png"), self.img)
             self.frame_id += 1
@@ -452,6 +451,94 @@ class GlobalFunc:
         return float(np.clip(smoothed, lo, hi))
 
     def assessDDP(self, scan_odom, global_path, state, inflation_radius):
+
+        self._vel_hist.append(float(state.v))
+
+        hist = list(self._vel_hist)
+
+        if len(hist) < 3:
+            return inflation_radius
+
+        lo = float(getattr(self.cfg, "infl_max_lo", 0.20))
+        hi = self._dyn_inflation_cap()
+
+        ir = float(np.clip(inflation_radius, lo, hi))
+        path = self.get_points_from_path(global_path, state)
+        self.dists = self.get_corners_points(path, scan_odom, state)
+
+        if self.dists is None or np.size(self.dists) == 0:
+            target_raw = ir
+        else:
+            d_min = float(np.min(self.dists))
+            if state.v <= 0.1:
+                target_raw = max(lo, ir - np.random.uniform(0.02, 0.15))
+            else:
+                if d_min <= 0:
+                    target_raw = ir + np.random.uniform(0.05, 0.15)
+                elif 0 < d_min < 0.05:
+                    target_raw = ir + np.random.uniform(0.01, 0.04)
+                elif d_min < 0.10:
+                    target_raw = ir + np.random.uniform(0.01, 0.02)
+                else:
+                    target_raw = ir
+
+        target_raw = float(np.clip(target_raw, lo, hi))
+        current = min(target_raw, hi)
+
+        if self._ema_final is None:
+            self._ema_final = current
+
+        alpha = 0.3
+        smoothed = alpha * current + (1 - alpha) * self._ema_final
+        self._ema_final = smoothed
+
+        return float(np.clip(smoothed, lo, hi))
+
+    def assessTEB(self, scan_odom, global_path, state, inflation_radius):
+
+        self._vel_hist.append(float(state.v))
+
+        hist = list(self._vel_hist)
+
+        if len(hist) < 3:
+            return inflation_radius
+
+        lo = float(getattr(self.cfg, "infl_max_lo", 0.20))
+        hi = self._dyn_inflation_cap()
+
+        ir = float(np.clip(inflation_radius, lo, hi))
+        path = self.get_points_from_path(global_path, state)
+        self.dists = self.get_corners_points(path, scan_odom, state)
+
+        if self.dists is None or np.size(self.dists) == 0:
+            target_raw = ir
+        else:
+            d_min = float(np.min(self.dists))
+            if state.v <= 0.1:
+                target_raw = max(lo, ir - np.random.uniform(0.02, 0.15))
+            else:
+                if d_min <= 0:
+                    target_raw = ir + np.random.uniform(0.05, 0.15)
+                elif 0 < d_min < 0.05:
+                    target_raw = ir + np.random.uniform(0.01, 0.04)
+                elif d_min < 0.10:
+                    target_raw = ir + np.random.uniform(0.01, 0.02)
+                else:
+                    target_raw = ir
+
+        target_raw = float(np.clip(target_raw, lo, hi))
+        current = min(target_raw, hi)
+
+        if self._ema_final is None:
+            self._ema_final = current
+
+        alpha = 0.3
+        smoothed = alpha * current + (1 - alpha) * self._ema_final
+        self._ema_final = smoothed
+
+        return float(np.clip(smoothed, lo, hi))
+
+    def assessMPPI(self, scan_odom, global_path, state, inflation_radius):
 
         self._vel_hist.append(float(state.v))
 
@@ -768,7 +855,6 @@ class GlobalFunc:
             cloud_obstacles = pc2.create_cloud_xyz32(header, obstacles_3d)
             self.test_pub2.publish(cloud_obstacles)
 
-# ================== 5) 对外外观类 ==================
 class JackalRos:
     def __init__(self, init_position, goal_position, use_move_base=False, img_dir=None, world_path = None, id = 0, cfg: Cfg=Cfg(), use_vlm = False):
         self.cfg = cfg
@@ -783,7 +869,6 @@ class JackalRos:
         self.start_position = init_position[:2]
         self.global_goal = np.array(goal_position[:2], dtype=float) if goal_position is not None else None
         self.scan: LaserScan | None = None
-        self.scan_xy = None
         self.costmap: OccupancyGrid | None = None
         self.global_path: Path | None = None
         self.WORLD_PATH = world_path
@@ -814,10 +899,6 @@ class JackalRos:
 
         self.iteration = 0
 
-        # extra_parameters
-        self.teb_fail = 0
-        self.dwa_fail = 0
-
         self.prev_goal_dist = None
         self.min_goal_dist = None
         self.no_progress_count = 0
@@ -825,7 +906,7 @@ class JackalRos:
 
         self.obs_odom = None
 
-        rospy.sleep(0.5)
+        time.sleep(1)
 
         self.safety = SafetyAssessor(cfg)
         self.globalFunc = GlobalFunc(cfg)
@@ -846,10 +927,9 @@ class JackalRos:
         self._ggoal_sub = rospy.Subscriber("/global_goal", Marker, self._on_global_goal)
         self._lplan_sub = rospy.Subscriber("/move_base/TrajectoryPlannerROS/local_plan", Path, self._on_local_plan, queue_size=1)
 
-        self._cmd_sub = rospy.Subscriber("/cmd_vel", Twist, self._on_cmd)
 
         if self.img_dir:
-            rospy.sleep(2.0)
+            time.sleep(2.0)
             self._costmap_sub = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self._on_costmap, queue_size=1)
             self._path_sub    = rospy.Subscriber("/move_base/NavfnROS/plan", Path, self._on_global_path, queue_size=1)
 
@@ -862,10 +942,6 @@ class JackalRos:
         self.pub_scan_odom = rospy.Publisher("/scan_odom", PointCloud2, queue_size=1, latch=True)
         self.test = rospy.Publisher("/test", PointCloud2, queue_size=1, latch=True)
         self.test2 = rospy.Publisher("/test2", PointCloud2, queue_size=1, latch=True)
-
-    def _on_cmd(self, msg):
-        self.dwa_v = msg.linear.x
-        self.dwa_omega = msg.angular.z
 
     def _on_laser(self, msg: LaserScan):
         self.scan = msg
@@ -1099,52 +1175,7 @@ class JackalRos:
 
         return pts_odom
 
-    def _compute_path_curvature(self, path: Path, sample_dist=0.3) -> float:
 
-        if path is None or len(path.poses) < 2:
-            return 0.0
-
-        def find_point_at_distance(start_idx, target_dist):
-            cumulative = 0.0
-            p_prev = path.poses[start_idx].pose.position
-
-            for i in range(start_idx + 1, len(path.poses)):
-                p_curr = path.poses[i].pose.position
-                seg_dist = math.sqrt(
-                    (p_curr.x - p_prev.x) ** 2 +
-                    (p_curr.y - p_prev.y) ** 2
-                )
-                cumulative += seg_dist
-
-                if cumulative >= target_dist:
-                    return p_curr, i
-
-                p_prev = p_curr
-
-            return None, -1
-
-        p0 = path.poses[0].pose.position
-        p1, idx1 = find_point_at_distance(0, sample_dist)
-
-        if p1 is None:
-            return 0.0
-
-        p2, _ = find_point_at_distance(idx1, sample_dist)
-
-        if p2 is None:
-            return 0.0
-
-        dx1, dy1 = p1.x - p0.x, p1.y - p0.y
-        dx2, dy2 = p2.x - p1.x, p2.y - p1.y
-
-        d1 = math.sqrt(dx1 ** 2 + dy1 ** 2)
-        d2 = math.sqrt(dx2 ** 2 + dy2 ** 2)
-
-        if d1 < 0.01 or d2 < 0.01:
-            return 0.0
-
-        cross = dx1 * dy2 - dy1 * dx2
-        return float(2.0 * cross / (d1 * d2 * (d1 + d2)))
 
     def publish_goals(self):
         if not rospy: return
@@ -1221,15 +1252,95 @@ class JackalRos:
         else:
             if start:
                 self.start_frame_id = self.drawer.frame_id
-                result = self.save_frame()
-                result = self.drawer.generate_img()
+                self.save_frame()
+                self.drawer.generate_img()
             elif done:
                 self._save_trajectory_summary("VLM", info)
                 self._clean_imgs()
                 return
             else:
-                result = self.save_frame()
-                result = self.drawer.generate_img()
+                self.save_frame()
+                self.drawer.generate_img()
+
+    def should_save_frame(self):
+
+        if self.is_colliding == True:
+            return False
+
+        delta_theta = abs(self.state.theta - self.reference_state.theta)
+        if delta_theta > math.pi:
+            delta_theta = 2 * math.pi - delta_theta
+
+        gx, gy = float(self.global_goal[0]), float(self.global_goal[1])
+
+        current_goal_dist = math.hypot(self.state.x - gx, self.state.y - gy)
+        reference_goal_dist = math.hypot(self.reference_state.x - gx,
+                                         self.reference_state.y - gy)
+
+        cumulative_progress = reference_goal_dist - current_goal_dist
+
+        if self.min_goal_dist is None:
+            self.min_goal_dist = current_goal_dist
+            closer_to_goal = False
+        else:
+            closer_to_goal = (self.min_goal_dist - current_goal_dist) > 0.1
+            if current_goal_dist < self.min_goal_dist:
+                self.min_goal_dist = current_goal_dist
+
+        is_turning = delta_theta > 0.2
+        has_velocity = abs(self.state.v) >= 0.1
+
+        has_cumulative_progress = cumulative_progress > 0.15
+
+        if closer_to_goal:
+            self.reference_state = copy.deepcopy(self.state)
+            self.no_progress_count = 0
+            return True
+
+        if has_cumulative_progress:
+            self.reference_state = copy.deepcopy(self.state)
+            self.no_progress_count = 0
+            return True
+
+        if is_turning or has_velocity:
+            self.no_progress_count += 1
+            if self.no_progress_count % 3 == 0:
+                self.reference_state = copy.deepcopy(self.state)
+                self.no_progress_count = 0
+                return True
+            return False
+
+        self.no_progress_count += 1
+
+        if self.no_progress_count > 4:
+            if np.random.random() < 0.05:
+                return True
+            return False
+
+        return True
+
+
+    def reset(self, init_params):
+        self.is_colliding = False; self.collision_count = 0
+        self.collision_start_time = None; self.last_collision_duration = None
+        self.bad_vel = 0; self.vel_counter = 0; self.start = False
+        self.start_time = 0; self.last_action = init_params
+        self.last_collision_time = None
+        self.should_abort = False
+        self.path_curvature = 0.0
+        self.prev_goal_dist = None
+        self.min_goal_dist = None
+        self.no_progress_count = 0
+        self.last_save_dist = None
+        self.local_plan = None
+        self.row = None
+        self.obs_odom = None
+
+        self.teb_fail = 0
+        self.dwa_fail = 0
+
+        self.globalFunc.reset()
+        self.safety.reset()
 
     def _clean_imgs(self):
         for frame_id in range(self.start_frame_id, self.drawer.frame_id):
@@ -1243,81 +1354,6 @@ class JackalRos:
                 except Exception as e:
                     if rospy:
                         rospy.logwarn(f"Failed to delete {img_name}: {e}")
-
-    def should_save_frame(self):
-        """
-        数据过滤策略（优化版）：
-        1. 碰撞时不保存
-        2. 打破历史记录 → 必定保存
-        3. 相对起点累积靠近goal > 阈值 → 保存
-        4. 没有累积进展，但有转向/速度 → 条件保存
-        5. 完全无进展 → 累计计数，5次后1%概率保存
-        """
-
-        if self.is_colliding == True:
-            return False
-
-        delta_theta = abs(self.state.theta - self.reference_state.theta)
-        if delta_theta > math.pi:
-            delta_theta = 2 * math.pi - delta_theta
-
-        # 2. 计算到goal的距离
-        gx, gy = float(self.global_goal[0]), float(self.global_goal[1])
-
-        current_goal_dist = math.hypot(self.state.x - gx, self.state.y - gy)
-        reference_goal_dist = math.hypot(self.reference_state.x - gx,
-                                         self.reference_state.y - gy)
-
-        # 关键：计算相对于reference_state的累积进展（带方向）
-        cumulative_progress = reference_goal_dist - current_goal_dist
-
-        # 3. 判断是否打破历史最近距离
-        if self.min_goal_dist is None:
-            self.min_goal_dist = current_goal_dist
-            closer_to_goal = False
-        else:
-            closer_to_goal = (self.min_goal_dist - current_goal_dist) > 0.1
-            if current_goal_dist < self.min_goal_dist:
-                self.min_goal_dist = current_goal_dist
-
-        # 4. 判断各种进展
-        is_turning = delta_theta > 0.2
-        has_velocity = abs(self.state.v) >= 0.1
-
-        # 累积靠近goal超过0.15m（只计正向进展）
-        has_cumulative_progress = cumulative_progress > 0.15
-
-        # === 分层判断 ===
-        # 第1优先级：打破历史记录 → 必定保存
-        if closer_to_goal:
-            self.reference_state = copy.deepcopy(self.state)
-            self.no_progress_count = 0
-            return True
-
-        # 第2优先级：相对起点有累积进展 → 必定保存
-        if has_cumulative_progress:
-            self.reference_state = copy.deepcopy(self.state)
-            self.no_progress_count = 0
-            return True
-
-        # 第3优先级：没有累积进展，但有转向或速度 → 条件保存
-        if is_turning or has_velocity:
-            self.no_progress_count += 1
-            if self.no_progress_count % 3 == 0:
-                self.reference_state = copy.deepcopy(self.state)
-                self.no_progress_count = 0
-                return True
-            return False
-
-        # 第4优先级：完全无进展
-        self.no_progress_count += 1
-
-        if self.no_progress_count > 4:
-            if np.random.random() < 0.05:
-                return True
-            return False
-
-        return True
 
     def _compute_goal_metrics(self):
         gx, gy = float(self.global_goal[0]), float(self.global_goal[1])
@@ -1363,7 +1399,7 @@ class JackalRos:
                     "vtheta_samples": int(self._safe_get(action, 3)),
                     "path_distance_bias": self._safe_get(action, 4),
                     "goal_distance_bias": self._safe_get(action, 5),
-                    "final_inflation": max(0.1, self._safe_get(action, 6) - self.dwa_fail),
+                    "final_inflation": self._safe_get(action, 6),
                 }
             else:
                 v_max = self._safe_call(self.assess_safety, 1.5)
@@ -1395,7 +1431,7 @@ class JackalRos:
                     "vtheta_samples": int(vtheta),
                     "path_distance_bias": self._safe_get(action, 4, 0.05),
                     "goal_distance_bias": self._safe_get(action, 5, 0.2),
-                    "final_inflation": max(0.1, inflation - self.dwa_fail),
+                    "final_inflation": inflation,
                 }
         elif self.planner_name == "TEB":
             if alg == "RL":
@@ -1432,7 +1468,7 @@ class JackalRos:
                     "dt_ref": action[3],
                     "min_obstacle_dist": min_obstacle_dist,
                     "inflation_dist": inflation_dist,
-                    "final_inflation": max(0.1, inflation - self.teb_fail),
+                    "final_inflation": inflation,
                 }
         elif self.planner_name == "DDP":
             if alg == "RL":
@@ -1500,15 +1536,14 @@ class JackalRos:
                 if self.state.v >= 1.5:
                     nr_pairs = max(action[2], 500)
                     nr_steps_ = np.random.uniform(10, 20)
-                    lambda_ = 5.0
+
                 elif self.state.v >= 1.0:
                     nr_pairs = max(action[2], 600)
                     nr_steps_ = np.random.uniform(20, 30)
-                    lambda_ = 10.0
+
                 else:
                     nr_pairs = max(action[2], 800)
                     nr_steps_ = np.random.uniform(30, 40)
-                    lambda_ = 15.0
 
                 return {
                     "max_vel_x": v_max,
@@ -1622,28 +1657,6 @@ class JackalRos:
         except (IndexError, TypeError, ValueError):
             return default
 
-    def reset(self, init_params):
-        self.is_colliding = False; self.collision_count = 0
-        self.collision_start_time = None; self.last_collision_duration = None
-        self.bad_vel = 0; self.vel_counter = 0; self.start = False
-        self.start_time = 0; self.last_action = init_params
-        self.last_collision_time = None
-        self.should_abort = False
-        self.path_curvature = 0.0
-        self.prev_goal_dist = None
-        self.min_goal_dist = None
-        self.no_progress_count = 0
-        self.last_save_dist = None
-        self.local_plan = None
-        self.row = None
-        self.obs_odom = None
-
-        self.teb_fail = 0
-        self.dwa_fail = 0
-
-        self.globalFunc.reset()
-        self.safety.reset()
-
     def _get_planner_name(self):
 
         if not self.img_dir:
@@ -1703,6 +1716,51 @@ class JackalRos:
 
         return (gazebo_x, gazebo_y)
 
+    def _compute_path_curvature(self, path: Path, sample_dist=0.3) -> float:
 
+        if path is None or len(path.poses) < 2:
+            return 0.0
+
+        def find_point_at_distance(start_idx, target_dist):
+            cumulative = 0.0
+            p_prev = path.poses[start_idx].pose.position
+
+            for i in range(start_idx + 1, len(path.poses)):
+                p_curr = path.poses[i].pose.position
+                seg_dist = math.sqrt(
+                    (p_curr.x - p_prev.x) ** 2 +
+                    (p_curr.y - p_prev.y) ** 2
+                )
+                cumulative += seg_dist
+
+                if cumulative >= target_dist:
+                    return p_curr, i
+
+                p_prev = p_curr
+
+            return None, -1
+
+        p0 = path.poses[0].pose.position
+        p1, idx1 = find_point_at_distance(0, sample_dist)
+
+        if p1 is None:
+            return 0.0
+
+        p2, _ = find_point_at_distance(idx1, sample_dist)
+
+        if p2 is None:
+            return 0.0
+
+        dx1, dy1 = p1.x - p0.x, p1.y - p0.y
+        dx2, dy2 = p2.x - p1.x, p2.y - p1.y
+
+        d1 = math.sqrt(dx1 ** 2 + dy1 ** 2)
+        d2 = math.sqrt(dx2 ** 2 + dy2 ** 2)
+
+        if d1 < 0.01 or d2 < 0.01:
+            return 0.0
+
+        cross = dx1 * dy2 - dy1 * dx2
+        return float(2.0 * cross / (d1 * d2 * (d1 + d2)))
 
 

@@ -107,18 +107,20 @@ class DWABase(gym.Env):
 
         time.sleep(10)  # sleep to wait until the gazebo being created
 
-        # initialize the node for gym env
+        # Initialize ROS node (soft_close() should have reset the state)
         rospy.init_node('gym', anonymous=True, log_level=rospy.FATAL)
         rospy.set_param('/use_sim_time', True)
 
     def launch_move_base(self, goal_position, base_local_planner):
         rospack = rospkg.RosPack()
+
         self.BASE_PATH = rospack.get_path('jackal_helper')
         launch_file = join(self.BASE_PATH, 'launch', 'move_base_applr_dwa.launch')
+
         self.move_base_process = subprocess.Popen(
             ['roslaunch', launch_file, 'base_local_planner:=' + base_local_planner])
 
-        time.sleep(3)
+        time.sleep(5)  # Additional buffer time
 
         self.move_base = DWA_move_base(goal_position=goal_position, base_local_planner=base_local_planner)
 
@@ -173,7 +175,7 @@ class DWABase(gym.Env):
         if self.use_vlm == False:
             alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
 
-            result = self.jackal_ros.save_frame()
+            self.jackal_ros.save_frame()
 
             self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
 
@@ -342,36 +344,26 @@ class DWABase(gym.Env):
             return False, "running"
 
     def soft_close(self):
-        """只关闭 Gazebo 和 move_base，保留 roscore"""
-        rospy.logwarn("Soft closing environment (keeping roscore)...")
+        import rospy.impl.registration
 
-        # 1. 先优雅地终止 move_base
-        try:
-            self.move_base_process.terminate()
-            self.move_base_process.wait(timeout=3)
-            rospy.loginfo("move_base terminated gracefully")
-        except:
-            rospy.logwarn("Force killing move_base")
-            self.move_base_process.kill()
+        self.gazebo_process.terminate()
+        self.gazebo_process.wait()
+        rospy.loginfo("Gazebo terminated gracefully")
 
-        time.sleep(1)
+        self.move_base_process.terminate()
+        self.move_base_process.wait()
 
-        # 2. 再终止 Gazebo
-        try:
-            self.gazebo_process.terminate()
-            self.gazebo_process.wait(timeout=5)
-            rospy.loginfo("Gazebo terminated gracefully")
-        except:
-            rospy.logwarn("Force killing Gazebo")
-            self.gazebo_process.kill()
-
-        # 3. 确保 Gazebo 进程完全关闭
-        os.system("killall gzclient 2>/dev/null")
-        time.sleep(0.5)
-        os.system("killall gzserver 2>/dev/null")
-        time.sleep(1)
-
-        rospy.logwarn("Soft close completed")
+        # Shutdown ROS node and reset initialization state
+        if rospy.core.is_initialized():
+            rospy.signal_shutdown('Environment closed')
+            time.sleep(0.5)
+            # Reset internal state to allow fresh reinitialization
+            rospy.core._shutdown_flag = False
+            rospy.core._in_shutdown = False
+            rospy.core.is_shutdown_requested = lambda: False
+            # Critical: reset the initialized flag
+            rospy.core.is_initialized = lambda: False
+            rospy.impl.registration._init_node_args = None
 
     def _get_flip_status(self):
         robot_position = self.gazebo_sim.get_model_state().pose.position

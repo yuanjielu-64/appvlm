@@ -110,8 +110,33 @@ class DWABase(gym.Env):
         self.move_base_process = subprocess.Popen(
             ['roslaunch', launch_file, 'base_local_planner:=' + base_local_planner])
 
-        # 等待move_base启动和costmap初始化
-        time.sleep(3)
+        # Wait for TF tree to be established
+        import tf
+        tf_listener = tf.TransformListener()
+        rospy.loginfo("Waiting for TF tree (base_link -> odom)...")
+
+        max_wait_time = 20.0  # Maximum wait time in seconds
+        start_time = rospy.Time.now()
+        tf_ready = False
+
+        while (rospy.Time.now() - start_time).to_sec() < max_wait_time:
+            try:
+                tf_listener.waitForTransform(
+                    'odom', 'base_link',
+                    rospy.Time(0),
+                    rospy.Duration(2.0)
+                )
+                rospy.loginfo("TF tree ready!")
+                tf_ready = True
+                break
+            except (tf.Exception, tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+                rospy.logwarn(f"Waiting for TF... ({e})")
+                time.sleep(0.5)
+
+        if not tf_ready:
+            rospy.logerr("TF tree not ready after waiting, continuing anyway...")
+
+        time.sleep(2)  # Additional buffer time for costmap initialization
 
         self.move_base = Eband_move_base(goal_position=goal_position, base_local_planner=base_local_planner)
 
