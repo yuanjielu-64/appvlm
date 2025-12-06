@@ -25,6 +25,14 @@ import io
 import base64
 import asyncio
 
+# 🚀 导入性能优化模块
+try:
+    from qwen_optimization_patch import apply_optimizations, get_optimized_generation_config, create_autocast_context
+    OPTIMIZATION_AVAILABLE = True
+except ImportError:
+    OPTIMIZATION_AVAILABLE = False
+    print("[WARN] qwen_optimization_patch.py not found, optimizations disabled")
+
 # ============================================================
 # 算法参数配置 (与 chatgpt.py 保持一致)
 # ============================================================
@@ -308,6 +316,12 @@ async def load_model():
 
     model.eval()
 
+    # 🚀 应用性能优化（在加载处理器之前）
+    if OPTIMIZATION_AVAILABLE and getattr(config, 'enable_optimizations', True):
+        model = apply_optimizations(model, config)
+    else:
+        print("[INFO] Performance optimizations disabled")
+
     # 加载处理器 - 🚀 优化: 大幅降低视觉分辨率以加速推理
     processor = AutoProcessor.from_pretrained(
         config.base_model,
@@ -578,6 +592,27 @@ def infer_parameters(request: InferenceRequest):
         # 🔍 可选: 启用profiler (只在debug模式)
         enable_profiler = getattr(config, 'enable_profiler', False)
 
+        # 🚀 获取优化的生成配置
+        if OPTIMIZATION_AVAILABLE:
+            gen_config = get_optimized_generation_config(config)
+            # 合并自定义配置
+            gen_config.update({
+                "max_new_tokens": max_new if enable_profiler else config.max_new_tokens,
+                "stopping_criteria": stopping,
+                "pad_token_id": processor.tokenizer.pad_token_id,
+                "eos_token_id": processor.tokenizer.eos_token_id,
+            })
+        else:
+            gen_config = {
+                "max_new_tokens": max_new if enable_profiler else config.max_new_tokens,
+                "do_sample": False,
+                "stopping_criteria": stopping,
+                "use_cache": True,
+                "num_beams": 1,
+                "pad_token_id": processor.tokenizer.pad_token_id,
+                "eos_token_id": processor.tokenizer.eos_token_id,
+            }
+
         with torch.inference_mode():
             if enable_profiler:
                 with torch.profiler.profile(
@@ -588,16 +623,7 @@ def infer_parameters(request: InferenceRequest):
                     record_shapes=True,
                     with_stack=True,
                 ) as prof:
-                    generated_ids = model.generate(
-                        **inputs,
-                        max_new_tokens=max_new,
-                        do_sample=False,
-                        stopping_criteria=stopping,
-                        use_cache=True,
-                        num_beams=1,
-                        pad_token_id=processor.tokenizer.pad_token_id,
-                        eos_token_id=processor.tokenizer.eos_token_id,
-                    )
+                    generated_ids = model.generate(**inputs, **gen_config)
 
                 # 输出profiler统计
                 print("\n" + "="*60)
@@ -606,16 +632,7 @@ def infer_parameters(request: InferenceRequest):
                 print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
                 print("="*60 + "\n")
             else:
-                generated_ids = model.generate(
-                    **inputs,
-                    max_new_tokens=config.max_new_tokens,
-                    do_sample=False,
-                    stopping_criteria=stopping,
-                    use_cache=True,
-                    num_beams=1,
-                    pad_token_id=processor.tokenizer.pad_token_id,
-                    eos_token_id=processor.tokenizer.eos_token_id,
-                )
+                generated_ids = model.generate(**inputs, **gen_config)
 
         if use_cuda_timing:
             cuda_end.record()
@@ -819,6 +836,44 @@ def parse_args():
         action="store_false",
         dest="cuda_timing",
         help="Disable CUDA event timing"
+    )
+
+    # 🚀 性能优化配置
+    parser.add_argument(
+        "--enable_optimizations",
+        action="store_true",
+        default=True,
+        help="Enable performance optimizations (default: True)"
+    )
+    parser.add_argument(
+        "--no_optimizations",
+        action="store_false",
+        dest="enable_optimizations",
+        help="Disable all performance optimizations"
+    )
+    parser.add_argument(
+        "--use_flash_attention",
+        action="store_true",
+        default=True,
+        help="Enable FlashAttention-2 / SDPA (default: True)"
+    )
+    parser.add_argument(
+        "--use_better_transformer",
+        action="store_true",
+        default=False,
+        help="Enable BetterTransformer (requires optimum library)"
+    )
+    parser.add_argument(
+        "--optimize_memory",
+        action="store_true",
+        default=True,
+        help="Enable memory optimizations (default: True)"
+    )
+    parser.add_argument(
+        "--inference_mode_strict",
+        action="store_true",
+        default=True,
+        help="Disable gradients for all parameters (default: True)"
     )
 
     # 算法配置

@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 配置参数
 BASE_MODEL="Qwen/Qwen2.5-VL-7B-Instruct"  # ✅ 修正：你用的是3B模型
-LORA_PATH=""
+LORA_PATH="/home/yuanjielu/robot_navigation/noetic/appvlm_ws/src/ros_jackal/model/dwa/25000"
 DEVICE_MAP="auto"     # 使用auto让模型自动分配
 ALGORITHM="DWA"
 PORT=5000
@@ -19,11 +19,21 @@ LOAD_IN_8BIT=false
 ENABLE_PROFILER=false  # 设为true启用详细profiler (会增加10-20%开销)
 CUDA_TIMING=true       # 使用CUDA事件精确计时
 
+# 🚀 性能优化配置（默认启用安全优化）
+ENABLE_OPTIMIZATIONS=true      # 总开关
+USE_FLASH_ATTENTION=true       # FlashAttention-2/SDPA (推荐)
+OPTIMIZE_MEMORY=true           # 内存优化 (推荐)
+
 # Conda环境Python解释器
 CONDA_PYTHON="/home/yuanjielu/miniforge3/envs/lmms-finetune-qwen/bin/python"
 
 # Qwen服务脚本路径
 QWEN_SERVER="${SCRIPT_DIR}/qwen_server.py"
+
+# 🔇 抑制不重要的警告（设置环境变量）
+export TRANSFORMERS_VERBOSITY=error  # 只显示错误，隐藏警告
+export TOKENIZERS_PARALLELISM=false  # 避免tokenizer警告
+export PYTHONWARNINGS="ignore::FutureWarning,ignore::UserWarning,ignore::DeprecationWarning"
 
 echo "=================================================="
 echo "  Starting Qwen2.5-VL Navigation Service"
@@ -38,6 +48,10 @@ echo "8-bit Quant:   ${LOAD_IN_8BIT}"
 echo "Startup Warm:  ${STARTUP_WARMUP}"
 echo "Profiler:      ${ENABLE_PROFILER}"
 echo "CUDA Timing:   ${CUDA_TIMING}"
+echo ""
+echo "🚀 Performance Optimizations:"
+echo "  FlashAttn:   ${USE_FLASH_ATTENTION}"
+echo "  Memory Opt:  ${OPTIMIZE_MEMORY}"
 echo "=================================================="
 
 # 检查文件是否存在
@@ -76,6 +90,21 @@ fi
 # 🔍 性能分析选项
 if [ "${ENABLE_PROFILER}" = true ]; then
   CMD+=( --enable_profiler )
+fi
+
+# 🚀 性能优化选项
+if [ "${ENABLE_OPTIMIZATIONS}" = true ]; then
+  # FlashAttention
+  if [ "${USE_FLASH_ATTENTION}" = true ]; then
+    CMD+=( --use_flash_attention )
+  fi
+
+  # 内存优化
+  if [ "${OPTIMIZE_MEMORY}" = true ]; then
+    CMD+=( --optimize_memory )
+  fi
+else
+  CMD+=( --no_optimizations )
 fi
 
 if [ "${CUDA_TIMING}" = false ]; then

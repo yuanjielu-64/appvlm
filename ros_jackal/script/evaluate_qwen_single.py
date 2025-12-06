@@ -341,7 +341,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run VLM evaluation on 300 worlds')
     parser.add_argument('--id', dest='actor_id', type=int, default=0)
     parser.add_argument('--world_idx', type=int, default=0)
-    parser.add_argument('--policy_name', dest='policy_name', default="ddp_qwen")
+    parser.add_argument('--policy_name', dest='policy_name', default="dwa_qwen")
     parser.add_argument('--buffer_path', dest='buffer_path', default="../buffer/")
     parser.add_argument('--world_path', dest='world_path', default="../jackal_helper/worlds/BARN1/")
     parser.add_argument('--total_worlds', type=int, default=300, help='Total number of worlds to run')

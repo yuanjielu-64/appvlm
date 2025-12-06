@@ -11,7 +11,6 @@ from typing import List, Dict, Optional
 import subprocess
 import os
 
-
 class QwenClient:
     """Qwen推理服务客户端"""
 
