@@ -1,4 +1,4 @@
-#include "planners/DWAPlanner.hpp"
+#include "localPlanners/DWAPlanner.hpp"
 
 #include <iomanip>
 #include <ros/ros.h>
@@ -34,8 +34,6 @@ namespace Antipatrea {
 
     bool DWAPlanner::handleNoMapPlanning(geometry_msgs::Twist &cmd_vel) {
 
-        if (robot->setting(Robot_config::NO_ANY_RECEIVED, 2) == false)
-          return false;
 
         normalParameters(*robot);
 
@@ -51,8 +49,6 @@ namespace Antipatrea {
     bool DWAPlanner::handleNormalSpeedPlanning(geometry_msgs::Twist &cmd_vel,
                                                std::pair<std::vector<PoseState>, bool> &best_traj, double dt) {
 
-        if (robot->setting(Robot_config::ONLY_LASER_RECEIVED, 2) == false)
-            return false;
 
         normalParameters(*robot);
 
@@ -71,9 +67,6 @@ namespace Antipatrea {
 
     bool DWAPlanner::handleLowSpeedPlanning(geometry_msgs::Twist &cmd_vel,
                                             std::pair<std::vector<PoseState>, bool> &best_traj, double dt) {
-
-        if (!robot->setting(Robot_config::ONLY_LASER_RECEIVED, 1))
-            return false;
 
         lowSpeedParameters(*robot);
 
@@ -106,8 +99,6 @@ namespace Antipatrea {
         }
 
         if (robot->getRobotState() == Robot_config::ROTATE_PLANNING) {
-            if (robot->setting(Robot_config::ONLY_LASER_RECEIVED, 2) == false)
-                return false;
 
             double angle = normalizeAngle(robot->rotating_angle - robot->getPoseState().theta_);
 
@@ -130,9 +121,6 @@ namespace Antipatrea {
                 return true;
             }
 
-            if (robot->setting(Robot_config::ONLY_COSTMAP_RECEIVED, 2) == false)
-                return false;
-
             recoverParameters(*robot);
 
             auto best_theta = recover(parent, parent_odom, best_traj, results);
@@ -147,8 +135,6 @@ namespace Antipatrea {
         }
 
         if (robot->getRobotState() == Robot_config::BACKWARD) {
-            if (robot->setting(Robot_config::ONLY_LASER_RECEIVED, 2) == false)
-                return false;
 
             frontBackParameters(*robot);
 
@@ -260,7 +246,7 @@ namespace Antipatrea {
 
         //Logger::m_out << "dw.max_angular_velocity_ " << dw.max_angular_velocity_ << "  dw.min_angular_velocity_ "  << dw.min_angular_velocity_ << std::endl;
 
-        int num_threads = 18;
+        int num_threads = robot->num_threads;
 
         std::vector<std::thread> threads;
         threads.reserve(num_threads);

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2018 Erion Plaku
  * All Rights Reserved
- *
+ * 
  *       Created by Erion Plaku
  *       Computational Robotics Group
  *       Department of Electrical Engineering and Computer Science
@@ -13,8 +13,8 @@
  * copyright holder.
  */
 
-#ifndef Antipatrea__DDPDWAPlanner_HPP_
-#define Antipatrea__DDPDWAPlanner_HPP_
+#ifndef Antipatrea__DWAPlanner_HPP_
+#define Antipatrea__DWAPlanner_HPP_
 
 #include "../robot/Jackal.hpp"
 #include "utils/Algebra.hpp"
@@ -29,15 +29,15 @@
 namespace Antipatrea {
     using PoseState = Robot_config::PoseState;
 
-    class DDPDWAPlanner {
+    class DWAPlanner {
     public:
-        DDPDWAPlanner(void) {
+        DWAPlanner(void) {
         }
 
-        virtual ~DDPDWAPlanner(void) {
+        virtual ~DWAPlanner(void) {
         }
 
-        virtual bool Solve(const int nrIters, const double dt, bool &canBeSolved);
+        virtual bool Solve(const int nrIters, const double tmax, bool &canBeSolved);
 
         class Cost {
         public:
@@ -118,18 +118,19 @@ namespace Antipatrea {
         virtual bool collisionCheck(std::vector<PoseState> &trajectory);
 
         virtual bool dwa_planning(PoseState &state, PoseState &state_odom,
-                                  std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
+                                  std::pair<std::vector<PoseState>, bool> &best_traj, double time);
 
-        virtual RobotBox calculateMovingBoundingBox(const PoseState &state,
+        virtual RobotBox calculateMovingBoundingBox(const PoseState &state1, const PoseState &state2,
                                                     double robot_width, double robot_length);
 
         virtual bool isBoxIntersectingBox(const RobotBox &bbox1, const std::vector<double> &obs) {
-            // return !(bbox1.x_max < obs[0] || bbox1.x_min > obs[0] ||
-            //          bbox1.y_max < obs[1] || bbox1.y_min > obs[1]);
-
-            return (obs[0] >= bbox1.x_min && obs[0] <= bbox1.x_max &&
-                    obs[1] >= bbox1.y_min && obs[1] <= bbox1.y_max);
+            return !(bbox1.x_max < obs[0] || bbox1.x_min > obs[0] ||
+                     bbox1.y_max < obs[1] || bbox1.y_min > obs[1]);
         }
+
+        virtual double calculateDistanceToCarEdge(
+            double carX, double carY, double cosTheta, double sinTheta,
+            double halfLength, double halfWidth, const std::vector<double> &obs);
 
         virtual std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
             PoseState &state, PoseState &state_odom, double angular_velocity);
@@ -137,9 +138,9 @@ namespace Antipatrea {
         virtual std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
             PoseState &state, PoseState &state_odom, double v, double w);
 
-        virtual double updateVelocity(double current, double target, double maxAccel, double minAccel, double t);
+        virtual void motion(PoseState &state, double velocity, double angular_velocity);
 
-        virtual void motion(PoseState &state, double velocity, double angular_velocity, double t);
+        virtual void normalize_costs(std::vector<Cost> &costs);
 
         virtual void process_segment(int thread_id, int start, int end, PoseState &state, PoseState &state_odom,
                                      double velocity_resolution,
@@ -148,7 +149,14 @@ namespace Antipatrea {
                                      std::vector<std::pair<std::vector<PoseState>, std::vector<PoseState> > > &
                                      thread_trajectories);
 
-        virtual void normalize_costs(std::vector<Cost> &costs);
+        virtual double calc_to_goal_cost(const std::vector<PoseState> &traj) {
+            if (use_goal_cost_ == false)
+                return 0.0;
+
+            return Algebra::PointDistance(2, &traj[traj.size() - 1].pose()[0], &local_goal[0]);
+        }
+
+        virtual double calc_speed_cost(const std::vector<PoseState> &traj);
 
         virtual Cost evaluate_trajectory(std::pair<std::vector<PoseState>, std::vector<PoseState> > &traj, double &dist,
                                          std::vector<double> &last_position);
@@ -156,29 +164,68 @@ namespace Antipatrea {
         virtual Cost evaluate_trajectory(std::vector<PoseState> &traj, double &dist,
                                          std::vector<double> &last_position);
 
-        virtual double calc_to_goal_cost(const std::vector<PoseState> &traj);
-
-        virtual std::vector<double> cal_weight_output_commands(std::vector<PoseState> &traj);
-
-        virtual double calc_speed_cost(const std::vector<PoseState> &trajs);
-
         virtual double calc_obs_cost(const std::vector<PoseState> &traj);
 
-        virtual double calc_ori_cost(const std::vector<PoseState> &traj);
+        virtual double calc_ori_cost(const std::vector<PoseState> &traj) {
+            if (!use_ori_cost_)
+                return 0.0;
 
-        virtual double calc_angular_velocity(const std::vector<PoseState> &traj);
+            double theta = calculateTheta(traj[traj.size() - 1], &local_goal[0]);
 
-        virtual double calc_path_cost(const std::vector<PoseState> &traj);
+            return fabs(theta);
+        }
+
+        virtual double calc_angular_velocity(const std::vector<PoseState> &traj) {
+            if (use_angular_cost_) {
+                double angular_velocity = std::abs(traj.front().angular_velocity_);
+                double angular_velocity_cost = angular_velocity * angular_velocity;
+                return angular_velocity_cost;
+            }
+
+            return 0.0;
+        }
+
+        virtual double calc_path_cost(const std::vector<PoseState> &traj) {
+            if (!use_path_cost_)
+                return 0.0;
+
+            double d = 0;
+            for (int i = 0; i < traj.size() - 2; i++)
+                d += Algebra::PointDistance(2, &traj[i].pose()[0], &traj[i + 1].pose()[0]);
+
+            if (d <= distance)
+                return 1e6;
+
+            std::vector<std::vector<double>> local_path = robot->local_paths;
+            if (local_path.empty()) {
+                // std::cerr << "Local path is empty!" << std::endl;
+                return 0;
+            }
+
+            int i = 0;
+            for (const auto& state : traj) {
+                double min_distance = std::numeric_limits<double>::max();
+                for (const auto& point : local_path) {
+                    if (point.size() < 2) continue; // Ensure the point has at least x and y coordinates
+                    double dx = state.x_ - point[0];
+                    double dy = state.y_ - point[1];
+                    double distance = std::sqrt(dx * dx + dy * dy);
+                    if (distance < min_distance) {
+                        min_distance = distance;
+                    }
+                }
+                d += min_distance; // Add the minimum distance to total
+                i++;
+            }
+
+            return d;
+        }
 
         virtual double calc_dist_to_path(const std::vector<double> &state);
 
-        virtual Window calc_dynamic_window(PoseState &state, double dt);
+        virtual Window calc_dynamic_window(PoseState &state);
 
         virtual double calculateTheta(const PoseState &x, const double *y);
-
-        virtual double calculateDistanceToCarEdge(
-            double carX, double carY, double cosTheta, double sinTheta,
-            double halfLength, double halfWidth, const std::vector<double> &obs);
 
         virtual double normalizeAngle(double angle);
 
@@ -193,12 +240,14 @@ namespace Antipatrea {
         double robot_radius_ = 0.03;
         double distance = 0.0;
 
-        int num_threads = 10;
+        int num_threads;  // Set from robot->num_threads
         double obs_range_ = 4;
         int nr_steps_ = 20;
         int v_steps_ = 20;
         int w_steps_ = 20;
         int state_dims = 5;
+        double path_distance_bias = 0.7;
+        double goal_distance_bias = 0.8;
 
         PoseState parent;
         PoseState parent_odom;
@@ -207,7 +256,6 @@ namespace Antipatrea {
         std::vector<double> global_goal;
         std::vector<double> local_goal;
         std::vector<double> timeInterval;
-        std::vector<double> weights;
 
         double to_goal_cost_gain_ = 0.8;
         double obs_cost_gain_ = 0.5;

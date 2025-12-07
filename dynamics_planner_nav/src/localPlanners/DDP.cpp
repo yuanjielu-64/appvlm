@@ -1,4 +1,4 @@
-#include "planners/DDP.hpp"
+#include "localPlanners/DDP.hpp"
 #include "utils/Algebra.hpp"
 #include <iomanip>
 #include <chrono>
@@ -43,8 +43,6 @@ namespace Antipatrea {
     }
 
     bool DDP::handleNoMapPlanning(geometry_msgs::Twist &cmd_vel) {
-        if (robot->setting(Robot_config::NO_ANY_RECEIVED, 2) == false)
-            return false;
 
         normalParameters(*robot);
 
@@ -59,9 +57,6 @@ namespace Antipatrea {
 
     bool DDP::handleNormalSpeedPlanning(geometry_msgs::Twist &cmd_vel,
                                         std::pair<std::vector<PoseState>, bool> &best_traj, double dt) {
-
-        if (robot->setting(Robot_config::ONLY_LASER_RECEIVED, 2) == false)
-            return false;
 
         normalParameters(*robot);
 
@@ -80,8 +75,7 @@ namespace Antipatrea {
 
     bool DDP::handleLowSpeedPlanning(geometry_msgs::Twist &cmd_vel,
                                      std::pair<std::vector<PoseState>, bool> &best_traj, double dt) {
-        if (!robot->setting(Robot_config::ONLY_LASER_RECEIVED, 1))
-            return false;
+
 
         lowSpeedParameters(*robot);
 
@@ -98,6 +92,7 @@ namespace Antipatrea {
 
     bool DDP::handleAbnormalPlaning(geometry_msgs::Twist &cmd_vel,
                                     std::pair<std::vector<PoseState>, bool> &best_traj, double dt) {
+
         if (robot->getRobotState() == Robot_config::BRAKE_PLANNING) {
             double vel = robot->getPoseState().velocity_;
 
@@ -118,9 +113,6 @@ namespace Antipatrea {
                 robot->setRobotState(Robot_config::BACKWARD);
                 return true;
             }
-
-            if (robot->setting(Robot_config::ONLY_LASER_RECEIVED, 2) == false)
-                return false;
 
             recoverParameters(*robot);
             bool result = false;
@@ -175,8 +167,6 @@ namespace Antipatrea {
         }
 
         if (robot->getRobotState() == Robot_config::BACKWARD) {
-            if (robot->setting(Robot_config::ONLY_LASER_RECEIVED, 2) == false)
-                return false;
 
             frontBackParameters(*robot);
 
@@ -191,7 +181,7 @@ namespace Antipatrea {
         return true;
     }
 
-    void DDP::publishCommand(geometry_msgs::Twist &cmd_vel, double linear, double angular) {
+    void DDP::publishCommand(geometry_msgs::Twist &cmd_vel, double linear, double angular) const {
         cmd_vel.linear.x = linear;
         cmd_vel.angular.z = angular;
         robot->Control().publish(cmd_vel);
@@ -210,8 +200,7 @@ namespace Antipatrea {
 
         Window dw = calc_dynamic_window(state, dt);
 
-        num_threads = (int) 8;
-        // Logger::m_out << "num_threads " << num_threads << std::endl;
+        num_threads = robot->num_threads;
 
         std::vector<std::vector<Cost> > thread_costs(num_threads);
         std::vector<std::vector<std::pair<std::vector<PoseState>, std::vector<PoseState> > > > thread_trajectories(

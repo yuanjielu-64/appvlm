@@ -1,5 +1,5 @@
 #include "../robot/Jackal.hpp"
-#include "../planners/DDP.hpp"
+#include "../localPlanners/DDP.hpp"
 #include "../utils/Timer.hpp"
 #include <ros/ros.h>
 

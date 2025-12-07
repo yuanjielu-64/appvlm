@@ -1,4 +1,4 @@
-#include "RobotView.hpp"
+#include "Jackal_publishers.hpp"
 #include "Utility.hpp"
 
 void RobotVisualizer::publishGoals(const ros::Publisher &global_goal_pub,
@@ -106,6 +106,27 @@ void RobotVisualizer::publishTrajectory(const ros::Publisher &traj_pub,
     traj_pub.publish(path);
 }
 
+void Robot_config::publishRobotState() const {
+    std_msgs::String state_msg;
+
+    switch(currentState) {
+        case INITIALIZING: state_msg.data = "INITIALIZING"; break;
+        case NORMAL_PLANNING: state_msg.data = "NORMAL_PLANNING"; break;
+        case LOW_SPEED_PLANNING: state_msg.data = "LOW_SPEED_PLANNING"; break;
+        case NO_MAP_PLANNING: state_msg.data = "NO_MAP_PLANNING"; break;
+        case BRAKE_PLANNING: state_msg.data = "BRAKE_PLANNING"; break;
+        case RECOVERY: state_msg.data = "RECOVERY"; break;
+        case ROTATE_PLANNING: state_msg.data = "ROTATE_PLANNING"; break;
+        case BACKWARD: state_msg.data = "BACKWARD"; break;
+        case FORWARD: state_msg.data = "FORWARD"; break;
+        case TEST: state_msg.data = "TEST"; break;
+        case IDLE: state_msg.data = "IDLE"; break;
+        default: state_msg.data = "UNKNOWN"; break;
+    }
+
+    robot_state_pub.publish(state_msg);
+}
+
 void Robot_config::view_Goal(std::vector<double> &goal, std::vector<double> &goal1) const {
     RobotVisualizer::publishGoals(global_goal_pub, local_goal_pub, goal, goal1);
 }
@@ -118,3 +139,4 @@ void Robot_config::viewTrajectories(std::vector<PoseState> &trajectories, int nr
 void Robot_config::viewTrajectories(std::vector<PoseState> &trajectories, int nr_steps_, std::vector<double> &t) const {
     RobotVisualizer::publishTrajectory(trajectory_pub, trajectories, nr_steps_, t);
 }
+

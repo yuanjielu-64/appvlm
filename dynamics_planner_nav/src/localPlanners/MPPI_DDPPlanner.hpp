@@ -13,8 +13,8 @@
  * copyright holder.
  */
 
-#ifndef Antipatrea__MPPIPlanner_HPP_
-#define Antipatrea__MPPIPlanner_HPP_
+#ifndef Antipatrea__DDPMPPIPlanner_HPP_
+#define Antipatrea__DDPMPPIPlanner_HPP_
 
 #include "../robot/Jackal.hpp"
 #include "utils/Algebra.hpp"
@@ -29,12 +29,12 @@
 namespace Antipatrea {
     using PoseState = Robot_config::PoseState;
 
-    class MPPIPlanner {
+    class DDPMPPIPlanner {
     public:
-        MPPIPlanner(void) {
+        DDPMPPIPlanner(void) {
         }
 
-        virtual ~MPPIPlanner(void) {
+        virtual ~DDPMPPIPlanner(void) {
         }
 
         virtual bool Solve(const int nrIters, const double dt, bool &canBeSolved);
@@ -86,6 +86,7 @@ namespace Antipatrea {
         Robot_config *robot;
 
     protected:
+
         virtual void commonParameters(Robot_config &robot);
 
         virtual void frontBackParameters(Robot_config &robot);
@@ -111,11 +112,11 @@ namespace Antipatrea {
         virtual double recover(PoseState &state, PoseState &state_odom,
                               std::pair<std::vector<PoseState>, bool> &best_traj, bool &results);
 
-        virtual double calculateDistanceToCarEdge(
-            double carX, double carY, double cosTheta, double sinTheta,
-            double halfLength, double halfWidth, const std::vector<double> &obs);
-
         virtual bool collisionCheck(std::vector<PoseState> &trajectory);
+
+        virtual double calculateDistanceToCarEdge(
+        double carX, double carY, double cosTheta, double sinTheta,
+        double halfLength, double halfWidth, const std::vector<double>& obs);
 
         virtual bool mppi_planning(PoseState &state, PoseState &state_odom,
                                   std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
@@ -180,6 +181,8 @@ namespace Antipatrea {
 
         virtual double calc_to_goal_cost(const std::vector<PoseState> &traj);
 
+        virtual std::vector<double> cal_weight_output_commands(std::vector<PoseState> &traj);
+
         virtual double calc_speed_cost(const std::vector<PoseState> &trajs);
 
         virtual double calc_obs_cost(const std::vector<PoseState> &traj);
@@ -209,15 +212,13 @@ namespace Antipatrea {
         double robot_radius_ = 0.03;
         double distance = 0.0;
 
-        int num_threads = 10;
+        int num_threads;  // Set from robot->num_threads
         double obs_range_ = 4;
 
         int nr_pairs_ = 20;
         int nr_steps_ = 20;
         double linear_stddev = 0.1;
         double angular_stddev = 0.05;
-        double lambda = 1;
-        double exploration_ratio = 0.3;  // 30%完全随机, 70%基于历史
 
         int v_steps_ = 20;
         int w_steps_ = 20;
@@ -230,6 +231,7 @@ namespace Antipatrea {
         std::vector<double> global_goal;
         std::vector<double> local_goal;
         std::vector<double> timeInterval;
+        std::vector<double> weights;
 
         double to_goal_cost_gain_ = 0.8;
         double obs_cost_gain_ = 0.5;
@@ -249,10 +251,6 @@ namespace Antipatrea {
         std::mutex mtx;
 
         std::vector<std::vector<double> > local_paths;
-
-        // MPPI历史最优控制序列 [step][v, w]
-        std::vector<std::pair<double, double>> u_optimal_;
-        bool has_previous_solution_ = false;
     };
 
 }

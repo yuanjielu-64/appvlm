@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2018 Erion Plaku
  * All Rights Reserved
- * 
+ *
  *       Created by Erion Plaku
  *       Computational Robotics Group
  *       Department of Electrical Engineering and Computer Science
@@ -13,31 +13,31 @@
  * copyright holder.
  */
 
-#ifndef Antipatrea__DWAPlanner_HPP_
-#define Antipatrea__DWAPlanner_HPP_
+#ifndef Antipatrea__MPPIPlanner_HPP_
+#define Antipatrea__MPPIPlanner_HPP_
 
 #include "../robot/Jackal.hpp"
 #include "utils/Algebra.hpp"
+#include "utils/PseudoRandom.hpp"
 #include <numeric>
 #include <thread>
 #include <mutex>
 #include <chrono>
 #include "utils/Timer.hpp"
-
-
+#include <random>
 
 namespace Antipatrea {
     using PoseState = Robot_config::PoseState;
 
-    class DWAPlanner {
+    class MPPIPlanner {
     public:
-        DWAPlanner(void) {
+        MPPIPlanner(void) {
         }
 
-        virtual ~DWAPlanner(void) {
+        virtual ~MPPIPlanner(void) {
         }
 
-        virtual bool Solve(const int nrIters, const double tmax, bool &canBeSolved);
+        virtual bool Solve(const int nrIters, const double dt, bool &canBeSolved);
 
         class Cost {
         public:
@@ -86,7 +86,6 @@ namespace Antipatrea {
         Robot_config *robot;
 
     protected:
-
         virtual void commonParameters(Robot_config &robot);
 
         virtual void frontBackParameters(Robot_config &robot);
@@ -99,26 +98,27 @@ namespace Antipatrea {
 
         virtual bool handleNoMapPlanning(geometry_msgs::Twist &cmd_vel);
 
-        virtual bool handleNormalSpeedPlanning(geometry_msgs::Twist &cmd_vel,
-                                               std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
+        virtual bool handleNormalSpeedPlanning(geometry_msgs::Twist &cmd_vel, std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
 
-        virtual bool handleLowSpeedPlanning(geometry_msgs::Twist &cmd_vel,
-                                            std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
+        virtual bool handleLowSpeedPlanning(geometry_msgs::Twist &cmd_vel, std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
 
-        virtual bool handleAbnormalPlaning(geometry_msgs::Twist &cmd_vel,
-                                           std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
+        virtual bool handleAbnormalPlaning(geometry_msgs::Twist &cmd_vel, std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
 
         virtual void publishCommand(geometry_msgs::Twist &cmd_vel, double linear, double angular);
 
         virtual bool hasRotateFirst(PoseState &state, PoseState &state_odom, double angle_to_goal);
 
         virtual double recover(PoseState &state, PoseState &state_odom,
-                               std::pair<std::vector<PoseState>, bool> &best_traj, bool &results);
+                              std::pair<std::vector<PoseState>, bool> &best_traj, bool &results);
+
+        virtual double calculateDistanceToCarEdge(
+            double carX, double carY, double cosTheta, double sinTheta,
+            double halfLength, double halfWidth, const std::vector<double> &obs);
 
         virtual bool collisionCheck(std::vector<PoseState> &trajectory);
 
-        virtual bool dwa_planning(PoseState &state, PoseState &state_odom,
-                                  std::pair<std::vector<PoseState>, bool> &best_traj, double time);
+        virtual bool mppi_planning(PoseState &state, PoseState &state_odom,
+                                  std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
 
         virtual RobotBox calculateMovingBoundingBox(const PoseState &state1, const PoseState &state2,
                                                     double robot_width, double robot_length);
@@ -128,35 +128,49 @@ namespace Antipatrea {
                      bbox1.y_max < obs[1] || bbox1.y_min > obs[1]);
         }
 
-        virtual double calculateDistanceToCarEdge(
-            double carX, double carY, double cosTheta, double sinTheta,
-            double halfLength, double halfWidth, const std::vector<double> &obs);
-
         virtual std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
             PoseState &state, PoseState &state_odom, double angular_velocity);
 
         virtual std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
+            PoseState &state, PoseState &state_odom, std::vector<std::pair<double, double>> &perturbations);
+
+        virtual std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
             PoseState &state, PoseState &state_odom, double v, double w);
 
-        virtual void motion(PoseState &state, double velocity, double angular_velocity);
+        virtual double updateVelocity(double current, double target, double maxAccel, double minAccel, double t);
 
-        virtual void normalize_costs(std::vector<Cost> &costs);
+        virtual void motion(PoseState &state, double velocity, double angular_velocity, double t);
 
-        virtual void process_segment(int thread_id, int start, int end, PoseState &state, PoseState &state_odom,
-                                     double velocity_resolution,
-                                     double angularVelocity_resolution, Window &dw,
-                                     std::vector<Cost> &thread_costs,
+        virtual void process_segment(int thread_id, int start, int end, PoseState &state, PoseState &state_odom, Window &dw,
+                                     std::vector<std::pair<double, double>> &pairs, std::vector<Cost> &thread_costs,
                                      std::vector<std::pair<std::vector<PoseState>, std::vector<PoseState> > > &
                                      thread_trajectories);
 
-        virtual double calc_to_goal_cost(const std::vector<PoseState> &traj) {
-            if (use_goal_cost_ == false)
-                return 0.0;
+        virtual std::vector<double> calculateSGCoefficients(int window_size, int poly_order);
 
-            return Algebra::PointDistance(2, &traj[traj.size() - 1].pose()[0], &local_goal[0]);
+        virtual bool invertMatrix(std::vector<std::vector<double>>& mat);
+
+        virtual void getTrajBySavitzkyGolayFilter(std::pair<std::vector<PoseState>, std::vector<PoseState>> &trajectories) {
+            std::vector<double> x;
+            std::vector<double> y;
+
+            for (auto & i : trajectories.first) {
+                x.push_back(i.x_);
+                y.push_back(i.y_);
+            }
+
+            std::vector<double> x_ = savitzkyGolayFilter(x, 5, 2);
+            std::vector<double> y_ = savitzkyGolayFilter(y, 5, 2);
+
+            for (int i = 0; i < trajectories.first.size(); i++) {
+                trajectories.first[i].x_ = x_[i];
+                trajectories.first[i].y_ = y_[i];
+            }
         }
 
-        virtual double calc_speed_cost(const std::vector<PoseState> &traj);
+        virtual std::vector<double> savitzkyGolayFilter(const std::vector<double>& data, int window_size, int poly_order);
+
+        virtual void normalize_costs(std::vector<Cost> &costs);
 
         virtual Cost evaluate_trajectory(std::pair<std::vector<PoseState>, std::vector<PoseState> > &traj, double &dist,
                                          std::vector<double> &last_position);
@@ -164,66 +178,21 @@ namespace Antipatrea {
         virtual Cost evaluate_trajectory(std::vector<PoseState> &traj, double &dist,
                                          std::vector<double> &last_position);
 
+        virtual double calc_to_goal_cost(const std::vector<PoseState> &traj);
+
+        virtual double calc_speed_cost(const std::vector<PoseState> &trajs);
+
         virtual double calc_obs_cost(const std::vector<PoseState> &traj);
 
-        virtual double calc_ori_cost(const std::vector<PoseState> &traj) {
-            if (!use_ori_cost_)
-                return 0.0;
+        virtual double calc_ori_cost(const std::vector<PoseState> &traj);
 
-            double theta = calculateTheta(traj[traj.size() - 1], &local_goal[0]);
+        virtual double calc_angular_velocity(const std::vector<PoseState> &traj);
 
-            return fabs(theta);
-        }
-
-        virtual double calc_angular_velocity(const std::vector<PoseState> &traj) {
-            if (use_angular_cost_) {
-                double angular_velocity = std::abs(traj.front().angular_velocity_);
-                double angular_velocity_cost = angular_velocity * angular_velocity;
-                return angular_velocity_cost;
-            }
-
-            return 0.0;
-        }
-
-        virtual double calc_path_cost(const std::vector<PoseState> &traj) {
-            if (!use_path_cost_)
-                return 0.0;
-
-            double d = 0;
-            for (int i = 0; i < traj.size() - 2; i++)
-                d += Algebra::PointDistance(2, &traj[i].pose()[0], &traj[i + 1].pose()[0]);
-
-            if (d <= distance)
-                return 1e6;
-
-            std::vector<std::vector<double>> local_path = robot->local_paths;
-            if (local_path.empty()) {
-                // std::cerr << "Local path is empty!" << std::endl;
-                return 0;
-            }
-
-            int i = 0;
-            for (const auto& state : traj) {
-                double min_distance = std::numeric_limits<double>::max();
-                for (const auto& point : local_path) {
-                    if (point.size() < 2) continue; // Ensure the point has at least x and y coordinates
-                    double dx = state.x_ - point[0];
-                    double dy = state.y_ - point[1];
-                    double distance = std::sqrt(dx * dx + dy * dy);
-                    if (distance < min_distance) {
-                        min_distance = distance;
-                    }
-                }
-                d += min_distance; // Add the minimum distance to total
-                i++;
-            }
-
-            return d;
-        }
+        virtual double calc_path_cost(const std::vector<PoseState> &traj);
 
         virtual double calc_dist_to_path(const std::vector<double> &state);
 
-        virtual Window calc_dynamic_window(PoseState &state);
+        virtual Window calc_dynamic_window(PoseState &state, double dt);
 
         virtual double calculateTheta(const PoseState &x, const double *y);
 
@@ -240,14 +209,19 @@ namespace Antipatrea {
         double robot_radius_ = 0.03;
         double distance = 0.0;
 
-        int num_threads = 10;
+        int num_threads;  // Set from robot->num_threads
         double obs_range_ = 4;
+
+        int nr_pairs_ = 20;
         int nr_steps_ = 20;
+        double linear_stddev = 0.1;
+        double angular_stddev = 0.05;
+        double lambda = 1;
+        double exploration_ratio = 0.3;  // 30%完全随机, 70%基于历史
+
         int v_steps_ = 20;
         int w_steps_ = 20;
         int state_dims = 5;
-        double path_distance_bias = 0.7;
-        double goal_distance_bias = 0.8;
 
         PoseState parent;
         PoseState parent_odom;
@@ -275,6 +249,10 @@ namespace Antipatrea {
         std::mutex mtx;
 
         std::vector<std::vector<double> > local_paths;
+
+        // MPPI历史最优控制序列 [step][v, w]
+        std::vector<std::pair<double, double>> u_optimal_;
+        bool has_previous_solution_ = false;
     };
 
 }

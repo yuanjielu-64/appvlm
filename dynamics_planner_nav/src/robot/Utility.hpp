@@ -12,7 +12,7 @@ double l2_distance(double x1, double y1, double x2, double y2);
 
 std::vector<double> savgolFilter(const std::vector<double>& data, int windowSize, int polyOrder);
 
-geometry_msgs::PoseStamped makePose(double x, double y, double theta);
+geometry_msgs::PoseStamped getPose(double x, double y, double theta);
 
 std::vector<double> transform_lg(double x, double y, double X, double Y, double PSI);
 

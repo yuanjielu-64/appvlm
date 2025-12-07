@@ -42,7 +42,7 @@ std::vector<double> savgolFilter(const std::vector<double> &data, int windowSize
     return filteredData;
 }
 
-geometry_msgs::PoseStamped makePose(double x, double y, double theta) {
+geometry_msgs::PoseStamped getPose(double x, double y, double theta) {
     geometry_msgs::PoseStamped pose;
     pose.header.frame_id = "odom";
     pose.header.stamp = ros::Time::now();

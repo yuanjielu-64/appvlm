@@ -99,7 +99,7 @@ namespace Antipatrea {
         bool handleLowSpeedPlanning(geometry_msgs::Twist &cmd_vel, std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
 
         bool handleAbnormalPlaning(geometry_msgs::Twist &cmd_vel, std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
-        void publishCommand(geometry_msgs::Twist &cmd_vel, double linear, double angular);
+        void publishCommand(geometry_msgs::Twist &cmd_vel, double linear, double angular) const;
 
         double calculateDistanceToCarEdge(
         double carX, double carY, double cosTheta, double sinTheta,
@@ -171,7 +171,7 @@ namespace Antipatrea {
         double distance = 0.0;
 
         double current_vel = 0.0;
-        int num_threads = 8;
+        int num_threads;  // Set from robot->num_threads
         double obs_range_ = 4;
 
         int nr_pairs_ = 20;

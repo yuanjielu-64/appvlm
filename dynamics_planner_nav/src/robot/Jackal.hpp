@@ -23,6 +23,10 @@
 // STL
 #include <vector>
 #include <memory>
+#include <mutex>
+
+// Utils
+#include "../utils/AsyncTaskExecutor.hpp"
 
 // Forward declarations
 class JackalCallbacks;
@@ -32,20 +36,15 @@ class Robot_config {
     friend class JackalCallbacks;
 
 public:
-    //==========================================================================
-    // PUBLIC TYPES AND ENUMS
-    //==========================================================================
-
     // Robot pose/velocity snapshot
     class PoseState {
     public:
         PoseState()
-            : x_(0.0), y_(0.0), theta_(0.0),
-              velocity_(0.0), angular_velocity_(0.0), valid_(false) {}
+            : x_(0.0), y_(0.0), theta_(0.0), velocity_(0.0), angular_velocity_(0.0), valid_(false) {}
 
         PoseState(double x, double y, double theta, double v, double w, bool valid)
-            : x_(x), y_(y), theta_(theta),
-              velocity_(v), angular_velocity_(w), valid_(valid) {}
+            : x_(x), y_(y), theta_(theta), velocity_(v), angular_velocity_(w), valid_(valid) {
+        }
 
         std::vector<double> pose() const { return {x_, y_}; }
 
@@ -123,7 +122,7 @@ public:
     };
 
     // Active map source
-    enum Map {
+    enum MapSource {
         ONLY_COSTMAP_RECEIVED = 0,
         ONLY_LASER_RECEIVED = 1,
         NO_ANY_RECEIVED = 2
@@ -134,6 +133,7 @@ public:
     //==========================================================================
 
     Robot_config();
+
     ~Robot_config() = default;
 
     //==========================================================================
@@ -144,20 +144,19 @@ public:
     Algorithm getAlgorithm() const { return algorithm; }
 
     void setDt(double t) { dt = t; }
+
     double getDt() const { return dt; }
 
     void setRobotState(RobotState state) { currentState = state; }
-    RobotState getRobotState() const { return currentState; }
 
-    void setMapType(Map map) { currentMap = map; }
-    Map getMapType() const { return currentMap; }
+    RobotState getRobotState() const { return currentState; }
 
     PoseState getPoseState() const { return robot_state; }
 
     std::vector<double> getLocalGoalCfg() { return local_goal; }
     std::vector<double> getGlobalGoalCfg() { return global_goal; }
 
-    std::vector<std::vector<double>> getDataMap() { return map; }
+    std::vector<std::vector<double> > getDataMap() { return map; }
 
     // Get robot footprint (physical dimensions for collision checking)
     Footprint getFootprint() const;
@@ -166,21 +165,20 @@ public:
     VelocityLimits getVelocityLimits() const;
 
     // Raw laser points in robot frame
-    const std::vector<Eigen::Vector2f>& getLaserPoints() const { return laserData; }
+    const std::vector<Eigen::Vector2f> &getLaserPoints() const { return laserData; }
 
     // Legacy: laser data as double vectors
-    std::vector<std::vector<double>> getLaserData();
+    std::vector<std::vector<double> > getLaserData();
 
-    std::vector<std::vector<double>> getCostmapDataOdom() const { return costmapDataOdom; }
+    std::vector<std::vector<double> > getCostmapDataOdom() const { return costmapDataOdom; }
 
-    double getDistanceToGoal() const { return los; }
     double getVelocity() const { return robot_state.velocity_; }
     double getAngularVelocity() const { return robot_state.angular_velocity_; }
 
-    TuningParams getTuningParams() const;
+    TuningParams setTuningParams() const;
 
     ros::Publisher Control() { return cmd_vel_pub; }
-    costmap_2d::Costmap2DROS* getCostMap() { return costmap; }
+    costmap_2d::Costmap2DROS *getCostMap() { return costmap; }
 
     //==========================================================================
     // CORE FUNCTIONALITY
@@ -189,38 +187,42 @@ public:
     // Prepare map and caches for planning cycle
     bool setup();
 
-    // Configure map and check distance to goal
-    bool setting(Map newMap, double distanceToGoal);
+    // Load map data from specified source and verify availability
+    bool getMapData();
 
     // Select and populate active map (laser/costmap)
-    void generateMap(Map newMap);
 
     // Set local goal in both robot and odom frames
-    void setLocalGoal(std::vector<double>& lg, double x, double y);
+    void setLocalGoal(std::vector<double> &lg, double x, double y) {
+        local_goal = {lg[0], lg[1]};
+        local_goal_odom = {x, y};
+    }
 
     // Trigger recovery behavior
     void triggerRecovery();
+
     void resetStoppedStatus();
 
     // Check if Gazebo is paused
-    bool isPaused() const;
+    bool checkGazeboPaused() const;
 
     // Publish current state as text
-    void publishRobotStateString() const;
-
+    void publishRobotState() const;
 
     // Update angular velocity limits dynamically
     void update_angular_velocity();
 
     // Visualization helpers
-    void view_Goal(std::vector<double>& goal, std::vector<double>& goal1) const;
-    void viewTrajectories(std::vector<PoseState>& trajectories, int nr_steps_,
-                         double theta_, std::vector<double>& t) const;
-    void viewTrajectories(std::vector<PoseState>& trajectories, int nr_steps_,
-                         std::vector<double>& t) const;
+    void view_Goal(std::vector<double> &goal, std::vector<double> &goal1) const;
+
+    void viewTrajectories(std::vector<PoseState> &trajectories, int nr_steps_,
+                          double theta_, std::vector<double> &t) const;
+
+    void viewTrajectories(std::vector<PoseState> &trajectories, int nr_steps_,
+                          std::vector<double> &t) const;
 
     // Utility: compute angle to point
-    static double calculateTheta(const PoseState& state, const std::vector<double>& y);
+    static double calculateTheta(const PoseState &state, const std::vector<double> &y);
 
     //==========================================================================
     // PUBLIC STATE (for legacy planner access)
@@ -234,7 +236,7 @@ public:
 
     // Current modes
     Algorithm algorithm;
-    Map currentMap;
+    MapSource currentMap;
     RobotState currentState;
 
     // Timing
@@ -253,23 +255,23 @@ public:
     double dynamic_recovery_wait_time = 0.5;
 
     // Paths and goals
-    std::vector<std::vector<double>> local_paths;
-    std::vector<std::vector<double>> local_paths_odom;
-    std::vector<std::vector<double>> local_goals_history;
-    std::vector<std::vector<std::vector<double>>> local_paths_history;
+    std::vector<std::vector<double> > local_paths;
+    std::vector<std::vector<double> > local_paths_odom;
+    std::vector<std::vector<double> > local_goals_history;
+    std::vector<std::vector<std::vector<double> > > local_paths_history;
     int history_index = 0;
 
-    std::vector<std::vector<double>> actions;
+    std::vector<std::vector<double> > actions;
     std::vector<double> local_goal_odom;
-    std::vector<std::vector<double>> local_goal_point;
-    std::vector<std::vector<double>> local_goal_point_odom;
+    std::vector<std::vector<double> > local_goal_point;
+    std::vector<std::vector<double> > local_goal_point_odom;
     std::vector<double> global_goal_odom;
 
-    std::vector<std::vector<geometry_msgs::Point>> polygons;
+    std::vector<std::vector<geometry_msgs::Point> > polygons;
 
     // Map data
-    std::vector<std::vector<double>> costmapDataOdom;
-    std::vector<std::vector<double>> costmapData;
+    std::vector<std::vector<double> > costmapDataOdom;
+    std::vector<std::vector<double> > costmapData;
     std::vector<double> laserDataDistance;
 
     // Time intervals for trajectory prediction
@@ -294,6 +296,7 @@ public:
     double local_goal_distance = 2.0;
     double distance = 0.3;
     double robot_radius_ = 0.01;
+    int num_threads = 8;  // Number of parallel threads for all planners
 
     // ROS node handle (public for convenience)
     ros::NodeHandle nh;
@@ -307,20 +310,30 @@ public:
     // Callback handler (needs to be after nh declaration)
     std::shared_ptr<JackalCallbacks> callbacks_;
 
+    // Async task executor for heavy callbacks (vision, global planning, etc.)
+    std::shared_ptr<AsyncTaskExecutor> async_executor_;
+
 protected:
     //==========================================================================
     // ROS CALLBACKS
     //==========================================================================
 
     // ROS callback forwarders - implemented in Jackal.cpp
-    void robotStatusCallback(const nav_msgs::Odometry::ConstPtr& msg);
-    void laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
-    void costmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
-    void globalPathCallback(const nav_msgs::Path::ConstPtr& msg);
-    void arrayCallback(const std_msgs::Float64MultiArray::ConstPtr& msg);
-    void paramsCallback(const std_msgs::Float64MultiArray::ConstPtr& msg);
-    void goalCallback(const move_base_msgs::MoveBaseActionGoal::ConstPtr& msg);
-    void velocityCallback(const nav_msgs::Odometry::ConstPtr& msg);
+    void robotStatusCallback(const nav_msgs::Odometry::ConstPtr &msg);
+
+    void laserScanCallback(const sensor_msgs::LaserScan::ConstPtr &msg);
+
+    void costmapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg);
+
+    void globalPathCallback(const nav_msgs::Path::ConstPtr &msg);
+
+    void arrayCallback(const std_msgs::Float64MultiArray::ConstPtr &msg);
+
+    void paramsCallback(const std_msgs::Float64MultiArray::ConstPtr &msg);
+
+    void goalCallback(const move_base_msgs::MoveBaseActionGoal::ConstPtr &msg);
+
+    void velocityCallback(const nav_msgs::Odometry::ConstPtr &msg);
 
     //==========================================================================
     // PROTECTED STATE
@@ -343,7 +356,7 @@ protected:
     ros::Publisher cmd_vel_pub;
     ros::Publisher robot_state_pub;
 
-    costmap_2d::Costmap2DROS* costmap{};
+    costmap_2d::Costmap2DROS *costmap{};
 
     // Internal state
     std::vector<double> global_goal;
@@ -351,10 +364,9 @@ protected:
     std::vector<double> costmapDataDistance;
     std::vector<double> costmapDataAngle;
     std::vector<Eigen::Vector2f> laserData;
-    std::vector<std::vector<double>> map;
+    std::vector<std::vector<double> > map;
 
     PoseState robot_state;
-    double los{};  // line-of-sight distance to goal
 
     // State machine timing
     bool is_stopped = false;
@@ -383,35 +395,35 @@ protected:
 //==============================================================================
 #include "Jackal_callbacks.hpp"
 
-inline void Robot_config::robotStatusCallback(const nav_msgs::Odometry::ConstPtr& msg) {
+inline void Robot_config::robotStatusCallback(const nav_msgs::Odometry::ConstPtr &msg) {
     callbacks_->robotStatusCallback(msg);
 }
 
-inline void Robot_config::laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& msg) {
+inline void Robot_config::laserScanCallback(const sensor_msgs::LaserScan::ConstPtr &msg) {
     callbacks_->laserScanCallback(msg);
 }
 
-inline void Robot_config::costmapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
+inline void Robot_config::costmapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
     callbacks_->costmapCallback(msg);
 }
 
-inline void Robot_config::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
+inline void Robot_config::globalPathCallback(const nav_msgs::Path::ConstPtr &msg) {
     callbacks_->globalPathCallback(msg);
 }
 
-inline void Robot_config::arrayCallback(const std_msgs::Float64MultiArray::ConstPtr& msg) {
+inline void Robot_config::arrayCallback(const std_msgs::Float64MultiArray::ConstPtr &msg) {
     callbacks_->arrayCallback(msg);
 }
 
-inline void Robot_config::paramsCallback(const std_msgs::Float64MultiArray::ConstPtr& msg) {
+inline void Robot_config::paramsCallback(const std_msgs::Float64MultiArray::ConstPtr &msg) {
     callbacks_->paramsCallback(msg);
 }
 
-inline void Robot_config::goalCallback(const move_base_msgs::MoveBaseActionGoal::ConstPtr& msg) {
+inline void Robot_config::goalCallback(const move_base_msgs::MoveBaseActionGoal::ConstPtr &msg) {
     callbacks_->goalCallback(msg);
 }
 
-inline void Robot_config::velocityCallback(const nav_msgs::Odometry::ConstPtr& msg) {
+inline void Robot_config::velocityCallback(const nav_msgs::Odometry::ConstPtr &msg) {
     callbacks_->velocityCallback(msg);
 }
 

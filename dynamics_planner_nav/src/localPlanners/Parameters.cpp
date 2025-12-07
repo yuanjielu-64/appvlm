@@ -2,16 +2,16 @@
 // Created by yuanjielu on 12/10/24.
 //
 
-#include "planners/MPPI_DDPPlanner.hpp"
-#include "planners/DWA_DDPPlanner.hpp"
-#include "planners/DWAPlanner.hpp"
-#include "planners/MPPIPlanner.hpp"
-#include "planners/DDP.hpp"
+#include "localPlanners/MPPI_DDPPlanner.hpp"
+#include "localPlanners/DWA_DDPPlanner.hpp"
+#include "localPlanners/DWAPlanner.hpp"
+#include "localPlanners/MPPIPlanner.hpp"
+#include "localPlanners/DDP.hpp"
 
 namespace Antipatrea {
 
     void DDP::commonParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -21,7 +21,7 @@ namespace Antipatrea {
     }
 
     void DDP::normalParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 20;
 
@@ -53,7 +53,7 @@ namespace Antipatrea {
     }
 
     void DDP::lowSpeedParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 20;
         nr_steps_ = 20;
@@ -114,7 +114,7 @@ namespace Antipatrea {
     }
 
     void DDP::frontBackParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = (int) robot.timeInterval.size();
@@ -143,7 +143,7 @@ namespace Antipatrea {
 
 
     void DDPDWAPlanner::commonParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -153,7 +153,7 @@ namespace Antipatrea {
     }
 
     void DDPDWAPlanner::normalParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 18;
         nr_steps_ = (int) robot.timeInterval.size();
@@ -182,7 +182,7 @@ namespace Antipatrea {
 
 
     void DDPDWAPlanner::lowSpeedParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = (int) robot.timeInterval.size();
@@ -210,7 +210,7 @@ namespace Antipatrea {
     }
 
     void DDPDWAPlanner::recoverParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 20;
         nr_steps_ = (int) robot.timeInterval.size();
@@ -238,7 +238,7 @@ namespace Antipatrea {
     }
 
     void DDPDWAPlanner::frontBackParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = (int) robot.timeInterval.size();
@@ -266,7 +266,7 @@ namespace Antipatrea {
     }
 
     void DWAPlanner::commonParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -276,7 +276,7 @@ namespace Antipatrea {
     }
 
     void DWAPlanner::normalParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = tp.vx_sample;
         w_steps_ = tp.vTheta_samples;
         nr_steps_ = 20;
@@ -309,7 +309,7 @@ namespace Antipatrea {
     }
 
     void DWAPlanner::lowSpeedParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = 20;
@@ -342,7 +342,7 @@ namespace Antipatrea {
     }
 
     void DWAPlanner::recoverParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = 20;
@@ -375,7 +375,7 @@ namespace Antipatrea {
     }
 
     void DWAPlanner::frontBackParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = 20;
@@ -409,7 +409,7 @@ namespace Antipatrea {
 
 
     void DDPMPPIPlanner::commonParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -523,7 +523,7 @@ namespace Antipatrea {
     }
 
     void MPPIPlanner::commonParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -533,7 +533,7 @@ namespace Antipatrea {
     }
 
      void MPPIPlanner::normalParameters(Robot_config &robot) {
-        const auto tp = robot.getTuningParams();
+        const auto tp = robot.setTuningParams();
         v_steps_ = 20;
         w_steps_ = 20;
         nr_steps_ = tp.nr_steps_;

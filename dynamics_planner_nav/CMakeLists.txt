@@ -51,11 +51,12 @@ include_directories(
 
 ## Collect source files
 file(GLOB ROBOT_SOURCES src/robot/*.cpp)
-file(GLOB PLANNER_SOURCES src/planners/*.cpp)
+file(GLOB LOCAL_PLANNER_SOURCES src/localPlanners/*.cpp)
+file(GLOB GLOBAL_PLANNER_SOURCES src/globalPlanners/*.cpp)
 
 # Ensure new modular units are compiled even if CMake glob cache lags
 list(APPEND ROBOT_SOURCES
-    src/robot/RobotView.cpp
+        src/robot/Jackal_publishers.cpp
     src/robot/Jackal_callbacks.cpp
 )
 
@@ -69,7 +70,8 @@ set(UTILS_SOURCES
 add_executable(${PROJECT_NAME}_node
     src/programs/RunMP.cpp
     ${ROBOT_SOURCES}
-    ${PLANNER_SOURCES}
+    ${LOCAL_PLANNER_SOURCES}
+    ${GLOBAL_PLANNER_SOURCES}
     ${UTILS_SOURCES}
 )
 

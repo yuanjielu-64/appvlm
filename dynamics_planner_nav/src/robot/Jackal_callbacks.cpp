@@ -241,6 +241,8 @@ void JackalCallbacks::paramsCallback(const std_msgs::Float64MultiArray::ConstPtr
 void JackalCallbacks::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
     // Start to find local and global goal
     if (robot_->global_goal_odom.empty()) {
+        robot_->global_goal_odom = {0, 10};
+        robot_->setRobotState(Robot_config::NORMAL_PLANNING);
         return;
     }
 
