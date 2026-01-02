@@ -64,9 +64,12 @@ install/
 
 # Large model files
 *.pth
+*.pt
+*.safetensors
 *.h5
 *.model
 models/checkpoints/
+ros_jackal/model/*/
 
 # Runtime logs
 logs/runtime/
