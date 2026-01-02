@@ -15,7 +15,6 @@ except ModuleNotFoundError:
 
 from envs.utils import GazeboSimulation, ddp_MoveBase, JackalRos
 
-
 class JackalBase(gym.Env):
     def __init__(
             self,
@@ -107,31 +106,25 @@ class JackalBase(gym.Env):
         self.WORLD_PATH = join(self.BASE_PATH, self.WORLD_PATH)
         world_name = join(self.WORLD_PATH, world_name)
 
-        if self.rviz_gui == False:
-            launch_file = join(self.BASE_PATH, 'launch', 'ddp_launch.launch')
+        if self.rviz_gui is False:
+            launch_file = join(self.BASE_PATH, 'launch', 'gazebo_ddp.launch')
         else:
-            launch_file = join(self.BASE_PATH, 'launch', 'ddp_launch_rviz.launch')
+            launch_file = join(self.BASE_PATH, 'launch', 'gazebo_ddp_rviz.launch')
 
-        if self.planner == 'DDP':
-            p1 = "RunMP"
-            p2 = "DDP"
-        elif self.planner == 'DWA':
-            p1 = "RunDWA"
-            p2 = "DDPDWAPlanner"
-        elif self.planner == 'MPPI':
-            p1 = "RunMPPI"
-            p2 = "MPPIPlanner"
-        else:
-            raise FileNotFoundError
+        # normalize planner string to match launch expectations
+        planner = str(self.planner).upper().replace('-', '_')
+        valid = { 'DDP', 'DWA', 'DWA_DDP', 'MPPI', 'MPPI_DDP' }
+        if planner not in valid:
+            raise ValueError(f"Unsupported planner: {self.planner}. Choose from {valid}")
 
-        self.gazebo_process = subprocess.Popen(['roslaunch',
-                                                launch_file,
-                                                'world_name:=' + world_name,
-                                                'ddp_param1:=' + p1,
-                                                'ddp_param2:=' + p2,
-                                                'gui:=' + ("true" if gui else "false"),
-                                                'verbose:=' + ("true" if verbose else "false"),
-                                                ])
+        self.gazebo_process = subprocess.Popen([
+            'roslaunch',
+            launch_file,
+            'world_name:=' + world_name,
+            'planner:=' + planner,
+            'gui:=' + ("true" if gui else "false"),
+            'verbose:=' + ("true" if verbose else "false"),
+        ])
 
         time.sleep(5)  # sleep to wait until the gazebo being created
 

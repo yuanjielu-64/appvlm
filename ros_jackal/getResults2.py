@@ -663,7 +663,7 @@ if __name__ == "__main__":
     # ============================================================================
     # CONFIGURATION
     # ============================================================================
-    baseline_dir = "data/mppi_hb_15/"  # Directory containing baseline CSV files
+    baseline_dir = "data/test/"  # Directory containing baseline CSV files
     top_n_per_env = 20  # Number of episodes per environment to analyze
     GOAL = 15  # Goal position Y coordinate (10 or 15)
 

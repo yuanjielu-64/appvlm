@@ -22,7 +22,7 @@ public:
     ~JackalCallbacks() = default;
 
     // ROS callback handlers
-    void robotStatusCallback(const nav_msgs::Odometry::ConstPtr& msg);
+    void odometryCallback(const nav_msgs::Odometry::ConstPtr& msg);
 
     void laserScanCallback(const sensor_msgs::LaserScan::ConstPtr& msg);
 
@@ -30,7 +30,7 @@ public:
 
     void globalPathCallback(const nav_msgs::Path::ConstPtr& msg);
 
-    void arrayCallback(const std_msgs::Float64MultiArray::ConstPtr& msg);
+    void timeIntervalCallback(const std_msgs::Float64MultiArray::ConstPtr& msg);
 
     void paramsCallback(const std_msgs::Float64MultiArray::ConstPtr& msg);
 
@@ -40,6 +40,13 @@ public:
 
 private:
     Robot_config* robot_;  // Pointer to parent robot instance
+
+    // Helper methods for globalPathCallback
+    bool handleEmptyGlobalPath();  // Handle when global planner returns empty path
+
+    void processValidGlobalPath(const nav_msgs::Path::ConstPtr& msg);  // Process normal global path
+
+    double computeLookaheadThreshold() const;  // Compute lookahead distance
 };
 
 #endif // DYNAMICS_PLANNER_NAV_JACKAL_CALLBACKS_HPP

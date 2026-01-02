@@ -11,17 +11,17 @@
 namespace Antipatrea {
 
     void DDP::commonParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         dt = tp.dt;
 
-        minAccelerSpeed = -20.0;  // Default acceleration limits
+        minAccelerSpeed = -20.0;
         maxAccelerSpeed = 20.0;
         minAngularAccelerSpeed = -25;
         maxAngularAccelerSpeed = 25;
     }
 
     void DDP::normalParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 20;
 
@@ -31,7 +31,6 @@ namespace Antipatrea {
         linear_stddev = tp.linear_stddev;
         angular_stddev = tp.angular_stddev;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = tp.distance;
@@ -53,7 +52,7 @@ namespace Antipatrea {
     }
 
     void DDP::lowSpeedParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 20;
         nr_steps_ = 20;
@@ -62,7 +61,6 @@ namespace Antipatrea {
         linear_stddev = tp.linear_stddev;
         angular_stddev = tp.angular_stddev;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = tp.distance;
@@ -91,7 +89,6 @@ namespace Antipatrea {
         //nr_pairs_ = 550;
         nr_pairs_ = 800;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.1;
@@ -114,14 +111,13 @@ namespace Antipatrea {
     }
 
     void DDP::frontBackParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = (int) robot.timeInterval.size();
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.05;
@@ -143,7 +139,7 @@ namespace Antipatrea {
 
 
     void DDPDWAPlanner::commonParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -153,14 +149,13 @@ namespace Antipatrea {
     }
 
     void DDPDWAPlanner::normalParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 18;
         nr_steps_ = (int) robot.timeInterval.size();
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.01;
@@ -182,14 +177,13 @@ namespace Antipatrea {
 
 
     void DDPDWAPlanner::lowSpeedParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = (int) robot.timeInterval.size();
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.1;
@@ -210,14 +204,13 @@ namespace Antipatrea {
     }
 
     void DDPDWAPlanner::recoverParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 20;
         nr_steps_ = (int) robot.timeInterval.size();
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.05;
@@ -238,14 +231,13 @@ namespace Antipatrea {
     }
 
     void DDPDWAPlanner::frontBackParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = (int) robot.timeInterval.size();
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.05;
@@ -266,7 +258,7 @@ namespace Antipatrea {
     }
 
     void DWAPlanner::commonParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -276,14 +268,13 @@ namespace Antipatrea {
     }
 
     void DWAPlanner::normalParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = tp.vx_sample;
         w_steps_ = tp.vTheta_samples;
         nr_steps_ = 20;
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.1;
@@ -302,21 +293,18 @@ namespace Antipatrea {
         ori_cost_gain_ = 0.2;
         aw_cost_gain_ = 0.2;
 
-        for (int i = 0; i < nr_steps_; ++i) {
-            timeInterval.push_back(dt);
-        }
+        timeInterval.assign(nr_steps_, dt);
 
     }
 
     void DWAPlanner::lowSpeedParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = 20;
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.1;
@@ -335,21 +323,18 @@ namespace Antipatrea {
         ori_cost_gain_ = 0.2;
         aw_cost_gain_ = 0.8;
 
-        for (int i = 0; i < nr_steps_; ++i) {
-            timeInterval.push_back(dt);
-        }
+        timeInterval.assign(nr_steps_, dt);
 
     }
 
     void DWAPlanner::recoverParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = 20;
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.05;
@@ -368,21 +353,18 @@ namespace Antipatrea {
         ori_cost_gain_ = 0.5;
         aw_cost_gain_ = 0.5;
 
-        for (int i = 0; i < nr_steps_; ++i) {
-            timeInterval.push_back(dt);
-        }
+        timeInterval.assign(nr_steps_, dt);
 
     }
 
     void DWAPlanner::frontBackParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 25;
         nr_steps_ = 20;
 
         dt = tp.dt;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.05;
@@ -401,15 +383,13 @@ namespace Antipatrea {
         ori_cost_gain_ = 0.5;
         aw_cost_gain_ = 0.5;
 
-        for (int i = 0; i < nr_steps_; ++i) {
-            timeInterval.push_back(dt);
-        }
+        timeInterval.assign(nr_steps_, dt);
 
     }
 
 
     void DDPMPPIPlanner::commonParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -424,7 +404,6 @@ namespace Antipatrea {
         nr_steps_ = (int) robot.timeInterval.size();
         nr_pairs_ = 550;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.1;
@@ -450,7 +429,6 @@ namespace Antipatrea {
         nr_steps_ = (int) robot.timeInterval.size();
         nr_pairs_ = 550;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.1;
@@ -479,7 +457,6 @@ namespace Antipatrea {
         distance = 0.05;
         robot_radius_ = 0.02;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         use_goal_cost_ = true;
@@ -505,7 +482,6 @@ namespace Antipatrea {
         distance = 0.05;
         robot_radius_ = 0.02;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         use_goal_cost_ = false;
@@ -523,7 +499,7 @@ namespace Antipatrea {
     }
 
     void MPPIPlanner::commonParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         dt = tp.dt;
 
         minAccelerSpeed = -20.0;  // Default acceleration limits
@@ -533,7 +509,7 @@ namespace Antipatrea {
     }
 
      void MPPIPlanner::normalParameters(Robot_config &robot) {
-        const auto tp = robot.setTuningParams();
+        const auto tp = robot.getTuningParams();
         v_steps_ = 20;
         w_steps_ = 20;
         nr_steps_ = tp.nr_steps_;
@@ -543,7 +519,6 @@ namespace Antipatrea {
         lambda = tp.lambda;
         exploration_ratio = 0.8;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.01;
@@ -562,9 +537,7 @@ namespace Antipatrea {
         ori_cost_gain_ = 0.2;
         aw_cost_gain_ = 0.8;
 
-        for (int i = 0; i < nr_steps_; ++i) {
-            timeInterval.push_back(dt);
-        }
+        timeInterval.assign(nr_steps_, dt);
     }
 
     void MPPIPlanner::lowSpeedParameters(Robot_config &robot) {
@@ -573,7 +546,6 @@ namespace Antipatrea {
         nr_steps_ = 20;
         nr_pairs_ = 600;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         distance = 0.01;
@@ -593,9 +565,7 @@ namespace Antipatrea {
         aw_cost_gain_ = 0.8;
 
 
-        for (int i = 0; i < nr_steps_; ++i) {
-            timeInterval.push_back(dt);
-        }
+        timeInterval.assign(nr_steps_, dt);
 
 
     }
@@ -609,7 +579,6 @@ namespace Antipatrea {
         distance = 0.05;
         robot_radius_ = 0.02;
 
-        global_goal = robot.getGlobalGoalCfg();
         local_goal = robot.getLocalGoalCfg();
 
         use_goal_cost_ = true;

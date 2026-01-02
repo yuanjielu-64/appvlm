@@ -4,14 +4,18 @@
 #include <ros/ros.h>
 
 namespace Antipatrea {
-    bool DDPMPPIPlanner::Solve(const int nrIters, double dt, bool &canBeSolved) {
+    void DDPMPPIPlanner::updateRobotState() {
+        parent = {0, 0, 0, robot->getPoseState().velocity_, robot->getPoseState().angular_velocity_, true};
+        parent_odom = robot->getPoseState();
+        timeInterval = robot->timeInterval;
+    }
+
+    bool DDPMPPIPlanner::Solve(int nrIters, double dt, bool &canBeSolved) {
         geometry_msgs::Twist cmd_vel;
 
         if (!robot) return false;
 
-        parent = {0, 0, 0, robot->getPoseState().velocity_, robot->getPoseState().angular_velocity_, true};
-        parent_odom = robot->getPoseState();
-        timeInterval = robot->timeInterval;
+        updateRobotState();
 
         std::pair<std::vector<PoseState>, bool> best_traj;
         best_traj.first.reserve(nr_steps_);
@@ -488,23 +492,6 @@ namespace Antipatrea {
     }
 
 
-    bool DDPMPPIPlanner::hasRotateFirst(PoseState &state, PoseState &state_odom,
-                                        double angle_to_goal) {
-        if (fabs(angle_to_goal) < angle_to_goal_)
-            return false;
-
-        const double angular_velocity = std::min(std::max(angle_to_goal, -robot->max_vel_x),
-                                                 robot->max_vel_x);
-
-        std::pair<std::vector<PoseState>, std::vector<PoseState> > trajectory = generateTrajectory(
-            state, state_odom, angular_velocity);
-
-        if (collisionCheck(trajectory.first))
-            return true;
-        else
-            return false;
-    }
-
     std::pair<std::vector<PoseState>, std::vector<PoseState> >
     DDPMPPIPlanner::generateTrajectory(PoseState &state, PoseState &state_odom,
                                        double angular_velocity) {
@@ -562,115 +549,6 @@ namespace Antipatrea {
         }
 
         return trajectory;
-    }
-
-    double DDPMPPIPlanner::updateVelocity(double current, double target, double maxAccel, double minAccel, double t) {
-        if (current < target) {
-            return std::min(current + maxAccel * t, target);
-        } else {
-            return std::max(current + minAccel * t, target);
-        }
-    }
-
-    bool DDPMPPIPlanner::invertMatrix(std::vector<std::vector<double> > &mat) {
-        int n = mat.size();
-        std::vector<std::vector<double> > identity(n, std::vector<double>(n, 0.0));
-        for (int i = 0; i < n; ++i) identity[i][i] = 1.0;
-
-        for (int i = 0; i < n; ++i) {
-            double diag = mat[i][i];
-            if (std::abs(diag) < 1e-8) return false; // 检查是否可逆
-
-            for (int j = 0; j < n; ++j) {
-                mat[i][j] /= diag;
-                identity[i][j] /= diag;
-            }
-
-            for (int k = 0; k < n; ++k) {
-                if (k == i) continue;
-                double factor = mat[k][i];
-                for (int j = 0; j < n; ++j) {
-                    mat[k][j] -= factor * mat[i][j];
-                    identity[k][j] -= factor * identity[i][j];
-                }
-            }
-        }
-        mat = identity;
-        return true;
-    }
-
-    std::vector<double> DDPMPPIPlanner::calculateSGCoefficients(int window_size, int poly_order) {
-        if (window_size % 2 == 0 || poly_order >= window_size) {
-            throw std::invalid_argument("Window size must be odd and greater than polynomial order.");
-        }
-
-        int half_window = window_size / 2;
-
-
-        std::vector<std::vector<double> > A(window_size, std::vector<double>(poly_order + 1, 0.0));
-        for (int i = -half_window; i <= half_window; ++i) {
-            for (int j = 0; j <= poly_order; ++j) {
-                A[i + half_window][j] = pow(i, j);
-            }
-        }
-
-        std::vector<std::vector<double> > ATA(poly_order + 1, std::vector<double>(poly_order + 1, 0.0));
-        for (int i = 0; i <= poly_order; ++i) {
-            for (int j = 0; j <= poly_order; ++j) {
-                for (int k = 0; k < window_size; ++k) {
-                    ATA[i][j] += A[k][i] * A[k][j];
-                }
-            }
-        }
-
-        if (!invertMatrix(ATA)) {
-            throw std::runtime_error("Matrix inversion failed. Check input parameters.");
-        }
-
-        std::vector<double> coefficients(window_size, 0.0);
-        for (int i = 0; i < window_size; ++i) {
-            for (int j = 0; j <= poly_order; ++j) {
-                coefficients[i] += ATA[j][0] * A[i][j];
-            }
-        }
-
-        return coefficients;
-    }
-
-
-    std::vector<double> DDPMPPIPlanner::savitzkyGolayFilter(const std::vector<double> &data, int window_size,
-                                                            int poly_order) {
-        std::vector<double> coefficients = {-0.0952, 0.1429, 0.2857, 0.3333, 0.2857, 0.1429, -0.0952};
-        //std::vector<double> coefficients = calculateSGCoefficients(window_size, poly_order);
-        int half_window = window_size / 2;
-
-        std::vector<double> smoothed_data(data.size(), 0.0);
-        for (size_t i = 0; i < data.size(); ++i) {
-            double smoothed_value = 0.0;
-
-            for (int j = -half_window; j <= half_window; ++j) {
-                int idx = std::min(std::max(static_cast<int>(i) + j, 0), static_cast<int>(data.size()) - 1);
-                smoothed_value += coefficients[j + half_window] * data[idx];
-            }
-
-            smoothed_data[i] = smoothed_value;
-        }
-
-        return smoothed_data;
-    }
-
-    void DDPMPPIPlanner::motion(PoseState &state, const double velocity, const double angular_velocity, double t) {
-        double v = updateVelocity(state.velocity_, velocity, maxAccelerSpeed, minAccelerSpeed, t);
-        double w = updateVelocity(state.angular_velocity_, angular_velocity, maxAngularAccelerSpeed,
-                                  minAngularAccelerSpeed, t);
-
-        state.theta_ += w * t;
-        state.x_ += v * cos(state.theta_) * t;
-        state.y_ += v * sin(state.theta_) * t;
-        state.velocity_ = v;
-        state.angular_velocity_ = w;
-
-        state.theta_ = normalizeAngle(state.theta_);
     }
 
     void DDPMPPIPlanner::normalize_costs(std::vector<DDPMPPIPlanner::Cost> &costs) {
@@ -757,29 +635,59 @@ namespace Antipatrea {
         return a - M_PI;
     }
 
-    bool DDPMPPIPlanner::collisionCheck(std::vector<PoseState> &traj) {
-        auto obss = robot->getDataMap();
-        auto footprint = robot->getFootprint();
-        auto velocity = robot->getVelocityLimits();
-        for (size_t i = 0; i < traj.size() - 1; ++i) {
-            const auto &state1 = traj[i];
-            const auto &state2 = traj[i + 1];
-            RobotBox moving_box = calculateMovingBoundingBox(state1, state2, footprint.length, footprint.width);
 
-            for (const auto &obs: obss) {
-                RobotBox expanded_box = moving_box;
-                expanded_box.x_min -= robot_radius_;
-                expanded_box.x_max += robot_radius_;
-                expanded_box.y_min -= robot_radius_;
-                expanded_box.y_max += robot_radius_;
-
-                if (isBoxIntersectingBox(expanded_box, obs)) {
-                    return false;
-                }
-            }
+    double DDPMPPIPlanner::calc_to_goal_cost(const std::vector<PoseState> &traj) {
+        if (use_goal_cost_ == false)
+            return 0.0;
+        double d = 0;
+        for (int i = 15; i < (int)traj.size() - 1; i++) {
+            d += Algebra::PointDistance(2, &traj[i].pose()[0], &local_goal[0]);
         }
-        return true;
+        return d / 5;
     }
+
+    double DDPMPPIPlanner::calc_speed_cost(const std::vector<PoseState> &trajs) {
+        if (!use_speed_cost_)
+            return 0.0;
+        const Window dw = calc_dynamic_window(parent, dt);
+        return dw.max_velocity_ - trajs.front().velocity_;
+    }
+
+    double DDPMPPIPlanner::calc_ori_cost(const std::vector<PoseState> &traj) {
+        if (!use_ori_cost_)
+            return 0.0;
+        double theta = calculateTheta(traj[traj.size() - 1], &local_goal[0]);
+        return fabs(theta);
+    }
+
+    double DDPMPPIPlanner::calc_angular_velocity(const std::vector<PoseState> &traj) {
+        if (use_angular_cost_) {
+            double angular_velocity = std::abs(traj.front().angular_velocity_);
+            double angular_velocity_cost = angular_velocity * angular_velocity;
+            return angular_velocity_cost;
+        }
+        return 0.0;
+    }
+
+    double DDPMPPIPlanner::updateVelocity(double current, double target, double maxAccel, double minAccel, double t) {
+        if (current < target) {
+            return std::min(current + maxAccel * t, target);
+        } else {
+            return std::max(current + minAccel * t, target);
+        }
+    }
+
+    void DDPMPPIPlanner::motion(PoseState &state, const double velocity, const double angular_velocity, double t) {
+        double v = updateVelocity(state.velocity_, velocity, maxAccelerSpeed, minAccelerSpeed, t);
+        double w = updateVelocity(state.angular_velocity_, angular_velocity, maxAngularAccelerSpeed, minAngularAccelerSpeed, t);
+        state.theta_ += w * t;
+        state.x_ += v * cos(state.theta_) * t;
+        state.y_ += v * sin(state.theta_) * t;
+        state.velocity_ = v;
+        state.angular_velocity_ = w;
+        state.theta_ = normalizeAngle(state.theta_);
+    }
+
 
     double DDPMPPIPlanner::calc_path_cost(const std::vector<PoseState> &traj) {
         if (!use_path_cost_)
@@ -817,39 +725,6 @@ namespace Antipatrea {
         return d;
     }
 
-    double DDPMPPIPlanner::calc_ori_cost(const std::vector<PoseState> &traj) {
-        if (!use_ori_cost_)
-            return 0.0;
-
-        double theta = calculateTheta(traj[traj.size() - 1], &local_goal[0]);
-
-        return fabs(theta);
-    }
-
-    double DDPMPPIPlanner::calc_angular_velocity(const std::vector<PoseState> &traj) {
-        if (use_angular_cost_) {
-            double angular_velocity = std::abs(traj.front().angular_velocity_);
-            double angular_velocity_cost = angular_velocity * angular_velocity;
-            return angular_velocity_cost;
-        }
-
-        return 0.0;
-    }
-
-    double DDPMPPIPlanner::calc_to_goal_cost(const std::vector<PoseState> &traj) {
-        if (use_goal_cost_ == false)
-            return 0.0;
-
-        double d = 0;
-        for (int i = 15; i < traj.size() - 1; i++) {
-            d += Algebra::PointDistance(2, &traj[i].pose()[0], &local_goal[0]);
-        }
-
-        return d / 5;
-
-        // return Algebra::PointDistance(2, &traj[traj.size() - 1].pose()[0], &local_goal[0]);
-
-    }
 
     double DDPMPPIPlanner::calc_dist_to_path(const std::vector<double> &state) {
         auto edge_point1 = local_paths.front();
@@ -929,57 +804,6 @@ namespace Antipatrea {
         return std::sqrt(dx * dx + dy * dy);
     }
 
-    double DDPMPPIPlanner::calc_speed_cost(const std::vector<PoseState> &traj) {
-        if (!use_speed_cost_)
-            return 0.0;
-
-        const Window dw = calc_dynamic_window(parent, dt);
-
-        return dw.max_velocity_ - traj.front().velocity_;
-    }
-
-    DDPMPPIPlanner::RobotBox DDPMPPIPlanner::calculateMovingBoundingBox(const PoseState &state1,
-                                                                        const PoseState &state2, double robot_width,
-                                                                        double robot_length) {
-        RobotBox bbox;
-
-        double dx = state2.x_ - state1.x_;
-        double dy = state2.y_ - state1.y_;
-        double angle = std::atan2(dy, dx);
-
-        double half_width = robot_width / 2.0;
-        double half_length = robot_length / 2.0;
-
-        std::vector<std::pair<double, double> > corners = {
-
-            {
-                state1.x_ - half_length * std::cos(angle) + half_width * std::sin(angle),
-                state1.y_ - half_length * std::sin(angle) - half_width * std::cos(angle)
-            },
-
-            {
-                state1.x_ - half_length * std::cos(angle) - half_width * std::sin(angle),
-                state1.y_ - half_length * std::sin(angle) + half_width * std::cos(angle)
-            },
-
-            {
-                state2.x_ + half_length * std::cos(angle) - half_width * std::sin(angle),
-                state2.y_ + half_length * std::sin(angle) + half_width * std::cos(angle)
-            },
-
-            {
-                state2.x_ + half_length * std::cos(angle) + half_width * std::sin(angle),
-                state2.y_ + half_length * std::sin(angle) - half_width * std::cos(angle)
-            }
-        };
-
-        bbox.x_min = std::min({corners[0].first, corners[1].first, corners[2].first, corners[3].first});
-        bbox.x_max = std::max({corners[0].first, corners[1].first, corners[2].first, corners[3].first});
-        bbox.y_min = std::min({corners[0].second, corners[1].second, corners[2].second, corners[3].second});
-        bbox.y_max = std::max({corners[0].second, corners[1].second, corners[2].second, corners[3].second});
-
-        return bbox;
-    }
 
     DDPMPPIPlanner::RobotBox::RobotBox() : x_max(0.0), x_min(0.0), y_max(0.0), y_min(0.0) {
     }
@@ -1028,28 +852,11 @@ namespace Antipatrea {
           ori_cost_(ori_cost), aw_cost_(aw_cost), total_cost_(total_cost) {
     }
 
-    void DDPMPPIPlanner::Cost::show() const {
-        ROS_INFO_STREAM("Cost: " << total_cost_);
-        ROS_INFO_STREAM("\tObs cost: " << obs_cost_);
-        ROS_INFO_STREAM("\tGoal cost: " << to_goal_cost_);
-        ROS_INFO_STREAM("\tSpeed cost: " << speed_cost_);
-        ROS_INFO_STREAM("\tPath cost: " << path_cost_);
-        ROS_INFO_STREAM("\tOri cost: " << ori_cost_);
-    }
-
     void DDPMPPIPlanner::Cost::calc_total_cost() {
         total_cost_ = obs_cost_ + to_goal_cost_ + speed_cost_ + path_cost_ + ori_cost_;
     }
 
-    void DDPMPPIPlanner::Window::show() const {
-        ROS_INFO_STREAM("Window:");
-        ROS_INFO_STREAM("\tVelocity:");
-        ROS_INFO_STREAM("\t\tmax: " << max_velocity_);
-        ROS_INFO_STREAM("\t\tmin: " << min_velocity_);
-        ROS_INFO_STREAM("\tYawrate:");
-        ROS_INFO_STREAM("\t\tmax: " << max_angular_velocity_);
-        ROS_INFO_STREAM("\t\tmin: " << min_angular_velocity_);
-    }
+    
 
     DDPMPPIPlanner::Window::Window() : min_velocity_(0.0), max_velocity_(0.0), min_angular_velocity_(0.0),
                                        max_angular_velocity_(0.0) {

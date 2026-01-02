@@ -12,21 +12,19 @@
       <rosparam command="load" file="$(find jackal_control)/config/robot_localization.yaml" />
     </node>
 
-    <arg name="gx5_enable" value="$(optenv JACKAL_GX5_IMU 0)"/>
-    <arg name="microstrain_enable" value="$(optenv JACKAL_IMU_MICROSTRAIN 0)"/>
-    <group if="$(eval gx5_enable | microstrain_enable)">
-      <!-- Optionally load the configuration for the secondary GX5-family IMU -->
+    <group if="$(optenv JACKAL_IMU_MICROSTRAIN 0)">
       <rosparam>
+        <!-- Optionally load the configuration for the Microstrain-family IMU -->
         ekf_localization:
-          imu1: gx5/imu/data
+          imu1: microstrain/imu/data
           imu1_config: [false, false, false,
-                      true, true, true,
+                      true, true, false,
                       false, false, false,
                       true, true, true,
                       false, false, false]
           imu1_differential: false
       </rosparam>
-      <param name="ekf_localization/imu1" value="$(optenv JACKAL_IMU_MICROSTRAIN_NAME gx5)/imu/data"/>
+      <param name="ekf_localization/imu1" value="$(optenv JACKAL_IMU_MICROSTRAIN_NAME microstrain)/imu/data"/>
     </group>
   </group>
 
@@ -36,7 +34,7 @@
   </node>
 
   <group if="$(optenv JACKAL_CONTROL_EXTRAS 0)" >
-    <rosparam command="load" file="$(env JACKAL_CONTROL_EXTRAS_PATH)" />
+    <rosparam command="load" file="$(env JACKAL_CONTROL_EXTRAS_PATH)" subst_value="true" />
   </group>
 
 </launch>

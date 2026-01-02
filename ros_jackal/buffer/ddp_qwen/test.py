@@ -4,7 +4,7 @@ df = pd.read_csv('actor_0/data_trajectory.csv')
 
 # 提取world数字并筛选6的倍数
 df['World'] = df['World'].str.extract(r'(\d+)').astype(int)
-df_filtered = df[df['World'] % 6 == 0]
+df_filtered = df
 
 # 处理Time: Collision=1 或 Status!=success 时设为50
 df_filtered['Time_adjusted'] = df_filtered.apply(

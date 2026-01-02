@@ -17,6 +17,7 @@
 #define Antipatrea__DDP_HPP_
 
 #include "../robot/Jackal.hpp"
+#include "utils/Algebra.hpp"
 #include <numeric>
 #include <thread>
 #include <mutex>
@@ -31,13 +32,11 @@ namespace Antipatrea {
 
     class DDP {
     public:
-        DDP(void) {
-        }
+        DDP() = default;
 
-        ~DDP(void) {
-        }
+        ~DDP() = default;
 
-        bool Solve(const int nrIters, const double dt, bool &canBeSolved);
+        bool Solve(int nrIters, double dt, bool &canBeSolved);
 
         class Cost {
         public:
@@ -84,14 +83,19 @@ namespace Antipatrea {
             double max_angular_velocity_;
         };
 
-        Robot_config *robot;
+        Robot_config *robot = nullptr;
 
     protected:
+        void updateRobotState();
+
         void commonParameters(Robot_config &robot);
 
         void frontBackParameters(Robot_config &robot);
+
         void normalParameters(Robot_config &robot);
+
         void lowSpeedParameters(Robot_config &robot);
+
         void recoverParameters(Robot_config &robot);
 
         bool handleNoMapPlanning(geometry_msgs::Twist &cmd_vel);
@@ -105,8 +109,8 @@ namespace Antipatrea {
         double carX, double carY, double cosTheta, double sinTheta,
         double halfLength, double halfWidth, const std::vector<double>& obs);
 
-        bool mppi_planning(PoseState &state, PoseState &state_odom,
-                                  std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
+        bool ddp_planning(PoseState &state, PoseState &state_odom,
+                                 std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
 
         std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
             PoseState &state, PoseState &state_odom, double angular_velocity);
@@ -119,7 +123,7 @@ namespace Antipatrea {
 
         static double updateVelocity(double current, double target, double maxAccel, double minAccel, double t);
 
-        void motion(PoseState &state, double velocity, double angular_velocity, double t);
+        void motion(PoseState &state, double velocity, double angular_velocity, double t) const;
 
         void process_segment(int thread_id, int start, int end, PoseState &state, PoseState &state_odom, Window &dw,
                                      std::vector<std::pair<double, double>> &pairs,
@@ -138,7 +142,7 @@ namespace Antipatrea {
 
         double calc_to_goal_cost(const std::vector<PoseState> &traj);
 
-        double calc_speed_cost(const std::vector<PoseState> &trajs);
+        double calc_speed_cost(const std::vector<PoseState> &trajs) const;
 
         double calc_obs_cost(const std::vector<PoseState> &traj);
 
@@ -148,15 +152,15 @@ namespace Antipatrea {
 
         double calc_ori_cost(const std::vector<PoseState> &traj);
 
-        double calc_angular_velocity(const std::vector<PoseState> &traj);
+        double calc_angular_velocity(const std::vector<PoseState> &traj) const;
 
-        double calc_path_cost(const std::vector<PoseState> &traj);
+        double calc_path_cost(const std::vector<PoseState> &traj) const;
 
-        Window calc_dynamic_window(PoseState &state, double dt);
+        Window calc_dynamic_window(PoseState &state, double dt) const;
 
         double calculateTheta(const PoseState &x, const double *y);
 
-        double normalizeAngle(double angle);
+        static double normalizeAngle(double angle);
 
         std::atomic<bool> timeout_flag{false};
 
@@ -171,7 +175,7 @@ namespace Antipatrea {
         double distance = 0.0;
 
         double current_vel = 0.0;
-        int num_threads;  // Set from robot->num_threads
+        int num_threads{};
         double obs_range_ = 4;
 
         int nr_pairs_ = 20;
@@ -185,7 +189,6 @@ namespace Antipatrea {
         PoseState parent;
         PoseState parent_odom;
 
-        std::vector<double> global_goal;
         std::vector<double> local_goal;
         std::vector<double> timeInterval;
 
@@ -200,14 +203,15 @@ namespace Antipatrea {
         double delta_v_sum = FLT_MIN;
         double delta_w_sum = FLT_MIN;
 
-        double minAccelerSpeed;
-        double maxAccelerSpeed;
-        double minAngularAccelerSpeed;
-        double maxAngularAccelerSpeed;
+        double minAccelerSpeed{};
+        double maxAccelerSpeed{};
+        double minAngularAccelerSpeed{};
+        double maxAngularAccelerSpeed{};
 
-        double dt;
-        double n;
+        double dt{};
+        double n{};
     };
+
 
 }
 

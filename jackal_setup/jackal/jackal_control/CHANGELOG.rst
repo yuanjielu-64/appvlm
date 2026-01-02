@@ -2,30 +2,53 @@
 Changelog for package jackal_control
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-0.7.9 (2022-03-08)
-------------------
-* Updated Microstrain Environment Variables (`#105 <https://github.com/jackal/jackal/issues/105>`_)
-  * Added JACKAL_IMU_MICROSTRAIN environment variable to accessories
-  * Updated variables in control.launch
-* Contributors: luis-camero
+0.8.10 (2024-05-24)
+-------------------
+* Removed Z position
+* Mod: Set 'publish_cmd' param to true in jackal_control/config
+  - With this change the diff drive controller will output the final cmd_vel to /jackal_velocity_controller/cmd_vel_out after any filters are applied (e.g., speed/acceleration limits)
+* Contributors: Luis Camero, Stephen Phillips
 
-0.7.8 (2022-01-18)
+0.8.9 (2024-02-14)
+------------------
+
+0.8.8 (2023-06-05)
+------------------
+
+0.8.7 (2023-04-19)
+------------------
+
+0.8.6 (2022-11-16)
+------------------
+
+0.8.5 (2022-05-17)
+------------------
+
+0.8.4 (2022-05-09)
+------------------
+* Disable absolute yaw in default imu configuration
+* Set subst_value=true when loading the control_extras file to allow envar-defined configuration inside the file
+* Contributors: Chris I-B, Chris Iverach-Brereton
+
+0.8.3 (2022-03-08)
+------------------
+
+0.8.2 (2022-02-15)
+------------------
+* Updated control.launch to new microstrain envvars and moved definition of ekf-localization paramaters into it
+* Added Microstrain GX5 to jackal_control
+* Contributors: Luis Camero
+
+0.8.1 (2022-01-18)
 ------------------
 * predict odom->base_link tf to current time
 * Contributors: Ebrahim Shahrivar
 
-0.7.7 (2021-10-01)
+0.8.0 (2021-04-23)
 ------------------
-* Enable roslaunch_add_file_check when CATKIN_ENABLE_TESTING=true
-* Contributors: PN:Ruichao Wu2
-
-0.7.6 (2021-07-18)
-------------------
-* Add envar support for adding a GX5 family IMU (`#85 <https://github.com/jackal/jackal/issues/85>`_)
-  * Add an alternate EKF file that uses the secondary IMU.  Add the GX5 link to the URDF if necessary. Standard mounting location TBD, so don't merge this yet.
-  * Add a sane default we can use for mounting the GX5.  RSCI-10 is low-priority, so we may not finalize the default position. But this way Integration can at least start using the envars and ensure they set the xyz/rpy offsets correctly.
-  * Don't disable the default IMU configuration, just load the GX5 settings as a secondary IMU
-* Contributors: Chris I-B
+* Merge branch 'noetic-devel-bkup' into noetic-devel
+* Fix the link_name parameter for the interactive marker server; the default for the package includes a leading '/', which prevents the markers from working on Noetic.  We can revert this if/when the default for interactive_marker_twist_server is modified.
+* Contributors: Chris Iverach-Brereton
 
 0.7.5 (2021-03-24)
 ------------------

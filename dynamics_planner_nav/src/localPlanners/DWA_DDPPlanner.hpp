@@ -31,13 +31,10 @@ namespace Antipatrea {
 
     class DDPDWAPlanner {
     public:
-        DDPDWAPlanner(void) {
-        }
+        DDPDWAPlanner() = default;
+        virtual ~DDPDWAPlanner() = default;
 
-        virtual ~DDPDWAPlanner(void) {
-        }
-
-        virtual bool Solve(const int nrIters, const double dt, bool &canBeSolved);
+        virtual bool Solve(int nrIters, double dt, bool &canBeSolved);
 
         class Cost {
         public:
@@ -46,8 +43,6 @@ namespace Antipatrea {
             Cost(double obs_cost, double to_goal_cost, double speed_cost, double path_cost, double ori_cost,
                  double aw_cost,
                  double total_cost);
-
-            void show() const;
 
             void calc_total_cost();
 
@@ -75,17 +70,16 @@ namespace Antipatrea {
         public:
             Window();
 
-            void show() const;
-
             double min_velocity_;
             double max_velocity_;
             double min_angular_velocity_;
             double max_angular_velocity_;
         };
 
-        Robot_config *robot;
+        Robot_config *robot = nullptr;
 
     protected:
+        void updateRobotState();
 
         virtual void commonParameters(Robot_config &robot);
 
@@ -110,26 +104,11 @@ namespace Antipatrea {
 
         virtual void publishCommand(geometry_msgs::Twist &cmd_vel, double linear, double angular);
 
-        virtual bool hasRotateFirst(PoseState &state, PoseState &state_odom, double angle_to_goal);
-
         virtual double recover(PoseState &state, PoseState &state_odom,
                                std::pair<std::vector<PoseState>, bool> &best_traj, bool &results);
 
-        virtual bool collisionCheck(std::vector<PoseState> &trajectory);
-
         virtual bool dwa_planning(PoseState &state, PoseState &state_odom,
                                   std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
-
-        virtual RobotBox calculateMovingBoundingBox(const PoseState &state,
-                                                    double robot_width, double robot_length);
-
-        virtual bool isBoxIntersectingBox(const RobotBox &bbox1, const std::vector<double> &obs) {
-            // return !(bbox1.x_max < obs[0] || bbox1.x_min > obs[0] ||
-            //          bbox1.y_max < obs[1] || bbox1.y_min > obs[1]);
-
-            return (obs[0] >= bbox1.x_min && obs[0] <= bbox1.x_max &&
-                    obs[1] >= bbox1.y_min && obs[1] <= bbox1.y_max);
-        }
 
         virtual std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
             PoseState &state, PoseState &state_odom, double angular_velocity);
@@ -193,18 +172,15 @@ namespace Antipatrea {
         double robot_radius_ = 0.03;
         double distance = 0.0;
 
-        int num_threads;  // Set from robot->num_threads
+        int num_threads;
         double obs_range_ = 4;
         int nr_steps_ = 20;
         int v_steps_ = 20;
         int w_steps_ = 20;
-        int state_dims = 5;
 
         PoseState parent;
         PoseState parent_odom;
 
-        std::vector<std::vector<double> > obstacles;
-        std::vector<double> global_goal;
         std::vector<double> local_goal;
         std::vector<double> timeInterval;
         std::vector<double> weights;
@@ -224,10 +200,10 @@ namespace Antipatrea {
         double dt;
         double n;
 
-        std::mutex mtx;
-
+        // mtx was unused
         std::vector<std::vector<double> > local_paths;
     };
+
 
 }
 

@@ -1,8 +1,8 @@
 // Jackal.cpp — Robot state manager and ROS interface
 #include "Jackal.hpp"
+#include "Jackal_callbacks.hpp"
 #include <ros/ros.h>
 #include <cmath>
-#include <algorithm>
 #include <nav_msgs/GetPlan.h>
 #include <visualization_msgs/Marker.h>
 #include <geometry_msgs/Twist.h>
@@ -10,12 +10,12 @@
 #include "Utility.hpp"
 
 bool Robot_config::setup() {
-    if (!checkGazeboPaused() && getRobotState() != INITIALIZING && getPoseState().valid_ && getMapData() && can_move &&
-        getGoal) {
+
+    if (!checkGazeboPaused() && getRobotState() != INITIALIZING && getPoseState().valid_ && getMapData() && local_goal_received) {
         return true;
     }
 
-    setRobotState(RobotState::IDLE);
+    // setRobotState(RobotState::IDLE);
     return false;
 }
 
@@ -111,7 +111,6 @@ std::vector<std::vector<double> > Robot_config::getLaserData() {
     return out;
 }
 
-
 //==============================================================================
 // Constructor: Initialize state and setup ROS communication
 //==============================================================================
@@ -119,8 +118,8 @@ Robot_config::Robot_config()
     : algorithm(DWA),
       currentState(INITIALIZING),
       currentMap(ONLY_LASER_RECEIVED),
-      getGoal(false),
-      can_move(false),
+      local_goal_received(false),
+      global_goal_received(false),
       param_received(false),
       canBeSolved(true),
       rotating_angle(0.0),
@@ -128,7 +127,7 @@ Robot_config::Robot_config()
       latter_obs(INFINITY),
       front_obs(INFINITY),
       recover_times(0) {
-    // Reserve capacity for goal vectors
+
     global_goal.reserve(2);
     local_goal.reserve(2);
     local_goal_odom.reserve(2);
@@ -144,22 +143,23 @@ Robot_config::Robot_config()
     // ---- Create Async Task Executor (for heavy callbacks) ----
     async_executor_ = std::make_shared<AsyncTaskExecutor>(num_threads);
 
-    // ---- ROS Subscribers ----
-    robot_pose_sub = nh.subscribe("/odometry/filtered", 10, &Robot_config::robotStatusCallback, this);
-    laser_scan_sub = nh.subscribe("/front/scan", 10, &Robot_config::laserScanCallback, this);
-    goal_sub = nh.subscribe("/move_base/goal", 10, &Robot_config::goalCallback, this);
-    costmap_update_sub = nh.subscribe("/move_base/local_costmap/costmap", 10, &Robot_config::costmapCallback, this);
-    velocity_sub = nh.subscribe("/odometry/filtered", 10, &Robot_config::velocityCallback, this);
-    global_path_sub = nh.subscribe<nav_msgs::Path>("/move_base/NavfnROS/plan", 10, &Robot_config::globalPathCallback,
-                                                   this);
-    array_dt_sub = nh.subscribe("/dy_dt", 1, &Robot_config::arrayCallback, this);
-    params_sub = nh.subscribe("/params", 1, &Robot_config::paramsCallback, this);
+    // ---- ROS Subscribers (directly bind to JackalCallbacks) ----
+    robot_pose_sub = nh.subscribe("/odometry/filtered", 10, &JackalCallbacks::odometryCallback, callbacks_.get());
+    laser_scan_sub = nh.subscribe("/front/scan", 10, &JackalCallbacks::laserScanCallback, callbacks_.get());
+    goal_sub = nh.subscribe("/move_base/goal", 10, &JackalCallbacks::goalCallback, callbacks_.get());
+    costmap_update_sub = nh.subscribe("/move_base/local_costmap/costmap", 10, &JackalCallbacks::costmapCallback, callbacks_.get());
+    velocity_sub = nh.subscribe("/odometry/filtered", 10, &JackalCallbacks::velocityCallback, callbacks_.get());
+    global_path_sub = nh.subscribe<nav_msgs::Path>("/move_base/NavfnROS/plan", 10, &JackalCallbacks::globalPathCallback, callbacks_.get());
+    array_dt_sub = nh.subscribe("/dy_dt", 1, &JackalCallbacks::timeIntervalCallback, callbacks_.get());
+    params_sub = nh.subscribe("/params", 1, &JackalCallbacks::paramsCallback, callbacks_.get());
 
     // ---- ROS Publish
     trajectory_pub = nh.advertise<nav_msgs::Path>("trajectory", 10);
     global_path_pub = nh.advertise<nav_msgs::Path>("global_path", 10);
+    smoothed_global_path_pub = nh.advertise<nav_msgs::Path>("smoothed_global_path", 10);
     local_goal_pub = nh.advertise<visualization_msgs::Marker>("local_goal", 1);
     global_goal_pub = nh.advertise<visualization_msgs::Marker>("global_goal", 1);
+    tuning_params_pub = nh.advertise<std_msgs::String>("/tuning_params", 1);
     cmd_vel_pub = nh.advertise<geometry_msgs::Twist>("/cmd_vel", 1);
     robot_state_pub = nh.advertise<std_msgs::String>("/robot_mode", 1);
 
@@ -169,6 +169,9 @@ Robot_config::Robot_config()
 
     ROS_INFO("Robot_config initialized successfully");
     ROS_INFO("All planners will use %d parallel threads", num_threads);
+
+    // Initialize tuning snapshot from current defaults
+    tuning_params_ = getTuningParams();
 }
 
 
@@ -183,25 +186,47 @@ double Robot_config::calculateTheta(const PoseState &state, const std::vector<do
 //==============================================================================
 // Get current tuning parameters snapshot
 //==============================================================================
-Robot_config::TuningParams Robot_config::setTuningParams() const {
+Robot_config::TuningParams Robot_config::getTuningParams() const {
     TuningParams params{};
-    params.max_vel_x = max_vel_x;
-    params.max_vel_y = max_vel_y;
-    params.acc_lim_theta = max_vel_theta;
-    params.vx_sample = static_cast<int>(vx_sample);
-    params.vTheta_samples = static_cast<int>(vTheta_samples);
-    params.path_distance_bias = path_distance_bias;
-    params.goal_distance_bias = goal_distance_bias;
-    params.nr_pairs_ = static_cast<int>(nr_pairs_);
-    params.nr_steps_ = static_cast<int>(nr_steps_);
-    params.linear_stddev = linear_stddev;
-    params.angular_stddev = angular_stddev;
-    params.lambda = lambda;
+    params.max_vel_x         = max_vel_x;
+    params.max_vel_y         = max_vel_y;
+    params.max_vel_theta     = max_vel_theta;
+    params.vx_sample         = static_cast<int>(vx_sample);
+    params.vTheta_samples    = static_cast<int>(vTheta_samples);
+    params.path_distance_bias= path_distance_bias;
+    params.goal_distance_bias= goal_distance_bias;
+    params.nr_pairs_         = static_cast<int>(nr_pairs_);
+    params.nr_steps_         = static_cast<int>(nr_steps_);
+    params.linear_stddev     = linear_stddev;
+    params.angular_stddev    = angular_stddev;
+    params.lambda            = lambda;
     params.local_goal_distance = local_goal_distance;
-    params.distance = distance;
-    params.robot_radius_ = robot_radius_;
-    params.dt = dt;
+    params.distance          = distance;
+    params.robot_radius_     = robot_radius_;
+    params.dt                = dt;
     return params;
+}
+
+void Robot_config::setTuningParams(const TuningParams &tp) {
+    // Basic assignment with minimal sanity checks; extend as needed
+    max_vel_x         = tp.max_vel_x;
+    max_vel_y         = tp.max_vel_y;
+    max_vel_theta     = tp.max_vel_theta;
+    vx_sample         = tp.vx_sample;
+    vTheta_samples    = tp.vTheta_samples;
+    path_distance_bias= tp.path_distance_bias;
+    goal_distance_bias= tp.goal_distance_bias;
+    nr_pairs_         = tp.nr_pairs_;
+    nr_steps_         = tp.nr_steps_;
+    linear_stddev     = tp.linear_stddev;
+    angular_stddev    = tp.angular_stddev;
+    lambda            = tp.lambda;
+    local_goal_distance = tp.local_goal_distance;
+    distance          = tp.distance;
+    robot_radius_     = tp.robot_radius_;
+    dt                = tp.dt;
+    // Keep snapshot in sync
+    tuning_params_    = tp;
 }
 
 

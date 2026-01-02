@@ -4,13 +4,17 @@
 #include <ros/ros.h>
 
 namespace Antipatrea {
-    bool DWAPlanner::Solve(const int nrIters, double dt, bool &canBeSolved) {
+    void DWAPlanner::updateRobotState() {
+        parent = {0, 0, 0, robot->getPoseState().velocity_, robot->getPoseState().angular_velocity_, true};
+        parent_odom = robot->getPoseState();
+    }
+
+    bool DWAPlanner::Solve(int nrIters, double dt, bool &canBeSolved) {
 
         geometry_msgs::Twist cmd_vel;
         if (!robot) return false;
 
-        parent = {0, 0, 0, robot->getPoseState().velocity_, robot->getPoseState().angular_velocity_, true};
-        parent_odom = robot->getPoseState();
+        updateRobotState();
 
         std::pair<std::vector<PoseState>, bool> best_traj;
         best_traj.first.reserve(nr_steps_);
@@ -371,22 +375,6 @@ namespace Antipatrea {
         //Logger::m_out << "thread ID " << thread_id << " time " << Timer::Elapsed(d_t) << std::endl;
     }
 
-    bool DWAPlanner::hasRotateFirst(PoseState &state, PoseState &state_odom,
-                                    double angle_to_goal) {
-        if (fabs(angle_to_goal) < angle_to_goal_)
-            return false;
-
-        const double angular_velocity = std::min(std::max(angle_to_goal, -robot->max_vel_x),
-                                                 robot->max_vel_x);
-
-        std::pair<std::vector<PoseState>, std::vector<PoseState> > trajectory =
-                generateTrajectory(state, state_odom, angular_velocity);
-
-        if (collisionCheck(trajectory.first))
-            return true;
-        else
-            return false;
-    }
 
     std::pair<std::vector<PoseState>, std::vector<PoseState> >
     DWAPlanner::generateTrajectory(PoseState &state, PoseState &state_odom,
@@ -427,18 +415,6 @@ namespace Antipatrea {
         }
 
         return trajectory;
-    }
-
-    void DWAPlanner::motion(PoseState &state, const double velocity, const double angular_velocity) {
-        double t = dt * pow(2.0, n / 2);
-
-        state.theta_ += angular_velocity * t;
-        state.x_ += velocity * cos(state.theta_) * t;
-        state.y_ += velocity * sin(state.theta_) * t;
-        state.velocity_ = velocity;
-        state.angular_velocity_ = angular_velocity;
-
-        state.theta_ = normalizeAngle(state.theta_);
     }
 
     void DWAPlanner::normalize_costs(std::vector<DWAPlanner::Cost> &costs) {
@@ -535,6 +511,90 @@ namespace Antipatrea {
         return cost;
     }
 
+    double DWAPlanner::calc_to_goal_cost(const std::vector<PoseState> &traj) {
+        if (use_goal_cost_ == false)
+            return 0.0;
+
+        return Algebra::PointDistance(2, &traj[traj.size() - 1].pose()[0], &local_goal[0]);
+    }
+
+    double DWAPlanner::calc_speed_cost(const std::vector<PoseState> &traj) {
+        if (!use_speed_cost_)
+            return 0.0;
+
+        const Window dw = calc_dynamic_window(parent);
+        return dw.max_velocity_ - traj.front().velocity_;
+    }
+
+    double DWAPlanner::calc_ori_cost(const std::vector<PoseState> &traj) {
+        if (!use_ori_cost_)
+            return 0.0;
+
+        double theta = calculateTheta(traj[traj.size() - 1], &local_goal[0]);
+        return fabs(theta);
+    }
+
+    double DWAPlanner::calc_angular_velocity(const std::vector<PoseState> &traj) {
+        if (use_angular_cost_) {
+            double angular_velocity = std::abs(traj.front().angular_velocity_);
+            double angular_velocity_cost = angular_velocity * angular_velocity;
+            return angular_velocity_cost;
+        }
+        return 0.0;
+    }
+
+    double DWAPlanner::calc_path_cost(const std::vector<PoseState> &traj) {
+        if (!use_path_cost_)
+            return 0.0;
+
+        double d = 0;
+        for (int i = 0; i < (int)traj.size() - 2; i++)
+            d += Algebra::PointDistance(2, &traj[i].pose()[0], &traj[i + 1].pose()[0]);
+
+        if (d <= distance)
+            return 1e6;
+
+        std::vector<std::vector<double>> local_path = robot->local_paths;
+        if (local_path.empty()) {
+            return 0;
+        }
+
+        for (const auto& state : traj) {
+            double min_distance = std::numeric_limits<double>::max();
+            for (const auto& point : local_path) {
+                if (point.size() < 2) continue;
+                double dx = state.x_ - point[0];
+                double dy = state.y_ - point[1];
+                double distance = std::sqrt(dx * dx + dy * dy);
+                if (distance < min_distance) {
+                    min_distance = distance;
+                }
+            }
+            d += min_distance;
+        }
+
+        return d;
+    }
+
+    double DWAPlanner::normalizeAngle(double a) {
+        a = fmod(a + M_PI, 2 * M_PI);
+        if (a <= 0)
+            a += 2 * M_PI;
+        return a - M_PI;
+    }
+
+    void DWAPlanner::motion(PoseState &state, const double velocity, const double angular_velocity) {
+        double t = dt * pow(2.0, n / 2);
+
+        state.theta_ += angular_velocity * t;
+        state.x_ += velocity * cos(state.theta_) * t;
+        state.y_ += velocity * sin(state.theta_) * t;
+        state.velocity_ = velocity;
+        state.angular_velocity_ = angular_velocity;
+
+        state.theta_ = normalizeAngle(state.theta_);
+    }
+
     double DWAPlanner::calculateTheta(const PoseState &state, const double *y) {
         double deltaX = y[0] - state.x_;
         double deltaY = y[1] - state.y_;
@@ -543,14 +603,6 @@ namespace Antipatrea {
         double normalizedTheta = normalizeAngle(state.theta_);
 
         return normalizeAngle(theta - normalizedTheta);
-    }
-
-    double DWAPlanner::normalizeAngle(double a) {
-        a = fmod(a + M_PI, 2 * M_PI);
-        if (a <= 0)
-            a += 2 * M_PI;
-
-        return a - M_PI;
     }
 
     double DWAPlanner::calc_dist_to_path(const std::vector<double> &state) {
@@ -563,29 +615,6 @@ namespace Antipatrea {
 
         return std::round(fabs(a * state[0] + b * state[1] + c) / (hypot(a, b) + DBL_EPSILON) * 1000) /
                1000;
-    }
-
-    bool DWAPlanner::collisionCheck(std::vector<PoseState> &traj) {
-        auto obss = robot->getDataMap();
-        auto footprint = robot->getFootprint();
-        for (size_t i = 0; i < traj.size() - 1; ++i) {
-            const auto &state1 = traj[i];
-            const auto &state2 = traj[i + 1];
-            RobotBox moving_box = calculateMovingBoundingBox(state1, state2, footprint.length, footprint.width);
-
-            for (const auto &obs: obss) {
-                RobotBox expanded_box = moving_box;
-                expanded_box.x_min -= robot_radius_;
-                expanded_box.x_max += robot_radius_;
-                expanded_box.y_min -= robot_radius_;
-                expanded_box.y_max += robot_radius_;
-
-                if (isBoxIntersectingBox(expanded_box, obs)) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 
     double DWAPlanner::calc_obs_cost(const std::vector<PoseState> &traj) {
@@ -652,57 +681,6 @@ namespace Antipatrea {
         return std::sqrt(dx * dx + dy * dy);
     }
 
-    double DWAPlanner::calc_speed_cost(const std::vector<PoseState> &traj) {
-        if (!use_speed_cost_)
-            return 0.0;
-
-        const Window dw = calc_dynamic_window(parent);
-
-        return dw.max_velocity_ - traj.front().velocity_;
-    }
-
-    DWAPlanner::RobotBox DWAPlanner::calculateMovingBoundingBox(const PoseState &state1,
-                                                                const PoseState &state2, double robot_width,
-                                                                double robot_length) {
-        RobotBox bbox;
-
-        double dx = state2.x_ - state1.x_;
-        double dy = state2.y_ - state1.y_;
-        double angle = std::atan2(dy, dx);
-
-        double half_width = robot_width / 2.0;
-        double half_length = robot_length / 2.0;
-
-        std::vector<std::pair<double, double> > corners = {
-
-            {
-                state1.x_ - half_length * std::cos(angle) + half_width * std::sin(angle),
-                state1.y_ - half_length * std::sin(angle) - half_width * std::cos(angle)
-            },
-
-            {
-                state1.x_ - half_length * std::cos(angle) - half_width * std::sin(angle),
-                state1.y_ - half_length * std::sin(angle) + half_width * std::cos(angle)
-            },
-
-            {
-                state2.x_ + half_length * std::cos(angle) - half_width * std::sin(angle),
-                state2.y_ + half_length * std::sin(angle) + half_width * std::cos(angle)
-            },
-
-            {
-                state2.x_ + half_length * std::cos(angle) + half_width * std::sin(angle),
-                state2.y_ + half_length * std::sin(angle) - half_width * std::cos(angle)
-            }
-        };
-
-        bbox.x_min = std::min({corners[0].first, corners[1].first, corners[2].first, corners[3].first});
-        bbox.x_max = std::max({corners[0].first, corners[1].first, corners[2].first, corners[3].first});
-        bbox.y_min = std::min({corners[0].second, corners[1].second, corners[2].second, corners[3].second});
-        bbox.y_max = std::max({corners[0].second, corners[1].second, corners[2].second, corners[3].second});
-
-        return bbox;
-    }
 
     DWAPlanner::RobotBox::RobotBox() : x_max(0.0), x_min(0.0), y_max(0.0), y_min(0.0) {
     }
@@ -722,27 +700,8 @@ namespace Antipatrea {
           ori_cost_(ori_cost), aw_cost_(aw_cost), total_cost_(total_cost) {
     }
 
-    void DWAPlanner::Cost::show() const {
-        ROS_INFO_STREAM("Cost: " << total_cost_);
-        ROS_INFO_STREAM("\tObs cost: " << obs_cost_);
-        ROS_INFO_STREAM("\tGoal cost: " << to_goal_cost_);
-        ROS_INFO_STREAM("\tSpeed cost: " << speed_cost_);
-        ROS_INFO_STREAM("\tPath cost: " << path_cost_);
-        ROS_INFO_STREAM("\tOri cost: " << ori_cost_);
-    }
-
     void DWAPlanner::Cost::calc_total_cost() {
         total_cost_ = obs_cost_ + to_goal_cost_ + speed_cost_ + path_cost_ + ori_cost_;
-    }
-
-    void DWAPlanner::Window::show() const {
-        ROS_INFO_STREAM("Window:");
-        ROS_INFO_STREAM("\tVelocity:");
-        ROS_INFO_STREAM("\t\tmax: " << max_velocity_);
-        ROS_INFO_STREAM("\t\tmin: " << min_velocity_);
-        ROS_INFO_STREAM("\tYawrate:");
-        ROS_INFO_STREAM("\t\tmax: " << max_angular_velocity_);
-        ROS_INFO_STREAM("\t\tmin: " << min_angular_velocity_);
     }
 
     DWAPlanner::Window::Window() : min_velocity_(0.0), max_velocity_(0.0), min_angular_velocity_(0.0),

@@ -254,11 +254,11 @@ def main(id, total_worlds=300, runs_per_world=2, use_qwen=False, qwen_url="http:
         vlm_client = QwenClient(
             qwen_url=qwen_url,
             algorithm=algorithm,
-            timeout=30.0  # 增加超时时间，Qwen推理较慢（第一次推理需要预热）
+            timeout=30.0
         )
-        # 添加img_id追踪 (兼容ChatGPT的接口)
+
         vlm_client.img_id = 0
-        # 等待Qwen服务就绪
+
         try:
             vlm_client.wait_for_service(timeout=60)
         except TimeoutError:
@@ -271,7 +271,6 @@ def main(id, total_worlds=300, runs_per_world=2, use_qwen=False, qwen_url="http:
             alg=algorithm,
             init_params=env_config["kwargs"]["param_init"]
         )
-
 
     world_name = get_world_name()
 
@@ -341,7 +340,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run VLM evaluation on 300 worlds')
     parser.add_argument('--id', dest='actor_id', type=int, default=0)
     parser.add_argument('--world_idx', type=int, default=0)
-    parser.add_argument('--policy_name', dest='policy_name', default="dwa_qwen")
+    parser.add_argument('--policy_name', dest='policy_name', default="ddp_qwen")
     parser.add_argument('--buffer_path', dest='buffer_path', default="../buffer/")
     parser.add_argument('--world_path', dest='world_path', default="../jackal_helper/worlds/BARN1/")
     parser.add_argument('--total_worlds', type=int, default=300, help='Total number of worlds to run')

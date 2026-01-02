@@ -4,8 +4,8 @@
   <arg name="headless" default="true" />
   <arg name="verbose" default="false" />
   <arg name="world_name" default="$(find jackal_helper)/worlds/jackal_race.world" />
-  <arg name="ddp_param1" default="RunMP" />
-  <arg name="ddp_param2" default="DDP" />
+  <!-- Planner selection for dynamics_planner_nav_node (DDP/DWA/DWA_DDP/MPPI/MPPI_DDP) -->
+  <arg name="planner" default="DDP" />
 
   <!-- Short-term hack to support the original front_laser:=true argument for spawning
        the simulator. This will be removed in favour of using the config:=x arg instead. -->
@@ -47,10 +47,12 @@
 
   <node pkg="jackal_helper" type="collision_publisher_node" name="collision_publisher_node" />
 
-  <node pkg="barn_challenge_lu" type="Runner" name="Runner" output="screen"
-    args="$(arg ddp_param1) $(find barn_challenge_lu)/data/ParamsForJackalGlobal.txt UseMP $(arg ddp_param2)"/>
+  <!-- Start our dynamics planner (select via ~planner) -->
+  <node pkg="dynamics_planner_nav" type="dynamics_planner_nav_node" name="dynamics_planner_nav" output="screen">
+    <param name="planner" value="$(arg planner)" />
+  </node>
 
-  <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find barn_challenge_lu)/rviz/a.rviz" /> -->
+  <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dynamics_planner_nav)/rviz/a.rviz" /> -->
 
   <!--- Run GMapping for SLAM -->
   <arg name="scan_topic" default="$(eval optenv('JACKAL_LASER_TOPIC', 'front/scan'))" />

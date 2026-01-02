@@ -1,0 +1,512 @@
+[
+    {
+        "id": "RL_000091",
+        "images": [
+            "actor_0/RL_000091.png"
+        ],
+        "parameters": [
+            1.9512,
+            3.1286,
+            384,
+            22,
+            0.1451,
+            0.1573,
+            -0.0405,
+            0.5733
+        ],
+        "prev_parameters": [
+            1.5,
+            2.0,
+            600,
+            20,
+            0.1,
+            0.05,
+            1.0,
+            0.25
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.786 m/s\n    - Angular velocity: -0.059 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000092",
+        "images": [
+            "actor_0/RL_000092.png"
+        ],
+        "parameters": [
+            1.9974,
+            3.0795,
+            305,
+            18,
+            0.1511,
+            0.148,
+            0.6098,
+            0.615
+        ],
+        "prev_parameters": [
+            1.9512,
+            3.1286,
+            384,
+            22,
+            0.1451,
+            0.1573,
+            -0.0405,
+            0.5733
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.257 m/s\n    - Angular velocity: 0.043 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000093",
+        "images": [
+            "actor_0/RL_000093.png"
+        ],
+        "parameters": [
+            1.9934,
+            2.9579,
+            396,
+            20,
+            0.146,
+            0.1535,
+            0.3213,
+            0.6301
+        ],
+        "prev_parameters": [
+            1.9974,
+            3.0795,
+            305,
+            18,
+            0.1511,
+            0.148,
+            0.6098,
+            0.615
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.129 m/s\n    - Angular velocity: -0.006 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000094",
+        "images": [
+            "actor_0/RL_000094.png"
+        ],
+        "parameters": [
+            2.2742,
+            3.0557,
+            435,
+            19,
+            0.1357,
+            0.1572,
+            0.3382,
+            0.6398
+        ],
+        "prev_parameters": [
+            1.9934,
+            2.9579,
+            396,
+            20,
+            0.146,
+            0.1535,
+            0.3213,
+            0.6301
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.082 m/s\n    - Angular velocity: -0.638 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000095",
+        "images": [
+            "actor_0/RL_000095.png"
+        ],
+        "parameters": [
+            1.9871,
+            2.7497,
+            429,
+            17,
+            0.1132,
+            0.1364,
+            0.6025,
+            0.6222
+        ],
+        "prev_parameters": [
+            2.2742,
+            3.0557,
+            435,
+            19,
+            0.1357,
+            0.1572,
+            0.3382,
+            0.6398
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.043 m/s\n    - Angular velocity: -0.877 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000096",
+        "images": [
+            "actor_0/RL_000096.png"
+        ],
+        "parameters": [
+            1.976,
+            3.1983,
+            498,
+            18,
+            0.0558,
+            0.1481,
+            1.9368,
+            0.5953
+        ],
+        "prev_parameters": [
+            1.9871,
+            2.7497,
+            429,
+            17,
+            0.1132,
+            0.1364,
+            0.6025,
+            0.6222
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 0.888 m/s\n    - Angular velocity: 0.013 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000097",
+        "images": [
+            "actor_0/RL_000097.png"
+        ],
+        "parameters": [
+            1.8114,
+            2.7601,
+            479,
+            20,
+            0.0812,
+            0.1517,
+            2.5879,
+            0.5592
+        ],
+        "prev_parameters": [
+            1.976,
+            3.1983,
+            498,
+            18,
+            0.0558,
+            0.1481,
+            1.9368,
+            0.5953
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 0.682 m/s\n    - Angular velocity: 0.419 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000098",
+        "images": [
+            "actor_0/RL_000098.png"
+        ],
+        "parameters": [
+            1.6724,
+            2.6147,
+            340,
+            20,
+            0.1385,
+            0.1489,
+            4.4274,
+            0.5899
+        ],
+        "prev_parameters": [
+            1.8114,
+            2.7601,
+            479,
+            20,
+            0.0812,
+            0.1517,
+            2.5879,
+            0.5592
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 0.635 m/s\n    - Angular velocity: 0.470 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000099",
+        "images": [
+            "actor_0/RL_000099.png"
+        ],
+        "parameters": [
+            2.0966,
+            2.6468,
+            379,
+            19,
+            0.1634,
+            0.1611,
+            0.611,
+            0.605
+        ],
+        "prev_parameters": [
+            1.6724,
+            2.6147,
+            340,
+            20,
+            0.1385,
+            0.1489,
+            4.4274,
+            0.5899
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 0.585 m/s\n    - Angular velocity: 0.746 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000100",
+        "images": [
+            "actor_0/RL_000100.png"
+        ],
+        "parameters": [
+            1.7774,
+            1.4437,
+            738,
+            20,
+            0.1468,
+            0.1461,
+            0.8779,
+            0.6125
+        ],
+        "prev_parameters": [
+            2.0966,
+            2.6468,
+            379,
+            19,
+            0.1634,
+            0.1611,
+            0.611,
+            0.605
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.017 m/s\n    - Angular velocity: 0.644 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000101",
+        "images": [
+            "actor_0/RL_000101.png"
+        ],
+        "parameters": [
+            2.0012,
+            2.7712,
+            442,
+            22,
+            0.1274,
+            0.163,
+            4.3289,
+            0.5899
+        ],
+        "prev_parameters": [
+            1.7774,
+            1.4437,
+            738,
+            20,
+            0.1468,
+            0.1461,
+            0.8779,
+            0.6125
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 0.972 m/s\n    - Angular velocity: 0.139 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000102",
+        "images": [
+            "actor_0/RL_000102.png"
+        ],
+        "parameters": [
+            2.0218,
+            3.3482,
+            399,
+            21,
+            0.1533,
+            0.1172,
+            0.2553,
+            0.6388
+        ],
+        "prev_parameters": [
+            2.0012,
+            2.7712,
+            442,
+            22,
+            0.1274,
+            0.163,
+            4.3289,
+            0.5899
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 0.999 m/s\n    - Angular velocity: 0.026 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000103",
+        "images": [
+            "actor_0/RL_000103.png"
+        ],
+        "parameters": [
+            1.9498,
+            2.8078,
+            397,
+            20,
+            0.1444,
+            0.1609,
+            0.6649,
+            0.587
+        ],
+        "prev_parameters": [
+            2.0218,
+            3.3482,
+            399,
+            21,
+            0.1533,
+            0.1172,
+            0.2553,
+            0.6388
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.228 m/s\n    - Angular velocity: -0.816 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000104",
+        "images": [
+            "actor_0/RL_000104.png"
+        ],
+        "parameters": [
+            1.9572,
+            3.1074,
+            373,
+            22,
+            0.1517,
+            0.1063,
+            0.6356,
+            0.4644
+        ],
+        "prev_parameters": [
+            1.9498,
+            2.8078,
+            397,
+            20,
+            0.1444,
+            0.1609,
+            0.6649,
+            0.587
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.170 m/s\n    - Angular velocity: -0.027 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000105",
+        "images": [
+            "actor_0/RL_000105.png"
+        ],
+        "parameters": [
+            2.1251,
+            2.8431,
+            384,
+            21,
+            0.1452,
+            0.14,
+            0.2497,
+            0.5662
+        ],
+        "prev_parameters": [
+            1.9572,
+            3.1074,
+            373,
+            22,
+            0.1517,
+            0.1063,
+            0.6356,
+            0.4644
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.154 m/s\n    - Angular velocity: 0.003 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000106",
+        "images": [
+            "actor_0/RL_000106.png"
+        ],
+        "parameters": [
+            2.051,
+            3.1472,
+            428,
+            18,
+            0.1463,
+            0.1515,
+            0.2484,
+            0.608
+        ],
+        "prev_parameters": [
+            2.1251,
+            2.8431,
+            384,
+            21,
+            0.1452,
+            0.14,
+            0.2497,
+            0.5662
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.258 m/s\n    - Angular velocity: 0.004 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    },
+    {
+        "id": "RL_000107",
+        "images": [
+            "actor_0/RL_000107.png"
+        ],
+        "parameters": [
+            1.9928,
+            3.2011,
+            399,
+            19,
+            0.1488,
+            0.1289,
+            0.9146,
+            0.6099
+        ],
+        "prev_parameters": [
+            2.051,
+            3.1472,
+            428,
+            18,
+            0.1463,
+            0.1515,
+            0.2484,
+            0.608
+        ],
+        "conversations": [
+            "<image>\n\n    Current robot state:\n    - Linear velocity: 1.267 m/s\n    - Angular velocity: -0.013 rad/s\n    \n    Target local planner: MPPI\n    \n    Use the scene image and robot state to perform navigation reasoning about obstacle proximity, path curvature, free-space structure, and motion constraints.\n"
+        ],
+        "system_prompt": "\n    You are a navigation scene analyzer for Clearpath Jackal robot motion planning.\n    Scene Representation (Costmap Visualization):\n    - Scale: Each grid cell represents approximately 1 meter.\n    - Robot: Yellow square (0.508 m x 0.430 m footprint)\n    - Green arrow: forward driving direction (x-axis)\n    - Blue line: lateral direction (y-axis)\n    - Obstacles: Red points from laser scanner measurements\n    - Global Path: Black curve showing a kinematic reference trajectory that guides direction but does not encode dynamics or feasibility.\n    - Background: Grey grid is for visualization only and has no obstacle or cost meaning.\n    Your Role:\n    Analyze the spatial layout to understand:\n    - Obstacle distribution and density around the robot\n    - Available free space and safe clearance margins\n    - Path geometry (straight corridor, sharp turn, narrow passage)\n    - Motion feasibility given the current velocity state\n    \n    Your navigation reasoning will be used downstream to select parameters for the local motion planner.\n\n"
+    }
+]

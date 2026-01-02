@@ -8,7 +8,6 @@
 #include "Jackal.hpp"
 
 // Lightweight visualizer for Robot_config-related markers and paths.
-// Generic implementation - can be used for any robot platform (Jackal, TurtleBot, etc.)
 class RobotVisualizer {
 public:
     static void publishGoals(const ros::Publisher &global_goal_pub,
@@ -26,6 +25,10 @@ public:
                                   std::vector<Robot_config::PoseState> &trajectories,
                                   int nr_steps_,
                                   const std::vector<double> &t);
+
+    static void publishSmoothedGlobalPath(const ros::Publisher &smoothed_path_pub,
+                                          const std::vector<double> &xhat,
+                                          const std::vector<double> &yhat);
 };
 
 #endif // DYNAMICS_PLANNER_NAV_ROBOT_VIEW_HPP

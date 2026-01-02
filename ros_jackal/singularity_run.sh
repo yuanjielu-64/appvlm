@@ -9,31 +9,22 @@ export ROS_MASTER_URI=http://localhost:${ROS_MASTER_PORT}
 
 echo "[INFO] Instance $INSTANCE_ID: ROS_MASTER_URI=$ROS_MASTER_URI"
 
-# 传递OpenAI API Key到容器
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo "[WARNING] OPENAI_API_KEY not set. API calls will fail."
+# 使用主机网络命名空间以访问 Qwen 服务（gpu011:5000）
+echo "[INFO] Using host network namespace for Qwen service access"
+
+# 构建环境变量参数
+ENV_VARS="--env ROS_MASTER_URI=$ROS_MASTER_URI"
+if [ -n "$QWEN_HOST" ]; then
+    ENV_VARS="$ENV_VARS --env QWEN_HOST=$QWEN_HOST"
+    echo "[INFO] QWEN_HOST=$QWEN_HOST"
+fi
+if [ -n "$QWEN_PORT" ]; then
+    ENV_VARS="$ENV_VARS --env QWEN_PORT=$QWEN_PORT"
+    echo "[INFO] QWEN_PORT=$QWEN_PORT"
 fi
 
-# 尝试使用 --fakeroot (需要管理员配置)
-# 如果失败，尝试 sudo
-if singularity exec --fakeroot --network=bridge echo "test" &>/dev/null; then
-    echo "[INFO] Using --fakeroot for network access"
-    NETWORK_FLAGS="--fakeroot --network=bridge"
-elif sudo -n singularity exec --network=bridge echo "test" &>/dev/null; then
-    echo "[INFO] Using sudo for network access"
-    USE_SUDO="sudo -E"
-    NETWORK_FLAGS="--network=bridge"
-else
-    echo "[ERROR] Cannot enable network. Options:"
-    echo "  1. Ask admin to run: sudo singularity config fakeroot --add $USER"
-    echo "  2. Give yourself passwordless sudo"
-    echo "  3. Run Python script on host instead of container"
-    exit 1
-fi
-
-# 运行容器
-$USE_SUDO singularity exec -i --nv -n $NETWORK_FLAGS -p \
-    --env OPENAI_API_KEY="$OPENAI_API_KEY" \
-    --env ROS_MASTER_URI="$ROS_MASTER_URI" \
+# 运行容器（移除 -n 标志以使用主机网络，这样可以访问 gpu011:5000）
+singularity exec -i --nv -p \
+    $ENV_VARS \
     -B `pwd`:/jackal_ws/src/ros_jackal \
     ${1} /bin/bash /jackal_ws/src/ros_jackal/entrypoint.sh ${@:2}

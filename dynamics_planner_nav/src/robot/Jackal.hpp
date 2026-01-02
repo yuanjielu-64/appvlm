@@ -60,7 +60,7 @@ public:
     struct TuningParams {
         double max_vel_x;
         double max_vel_y;
-        double acc_lim_theta;
+        double max_vel_theta;  // maximum allowed angular velocity
         int vx_sample;
         int vTheta_samples;
         double path_distance_bias;
@@ -128,133 +128,79 @@ public:
         NO_ANY_RECEIVED = 2
     };
 
-    //==========================================================================
-    // CONSTRUCTOR & DESTRUCTOR
-    //==========================================================================
-
     Robot_config();
 
     ~Robot_config() = default;
 
-    //==========================================================================
-    // GETTERS & SETTERS
-    //==========================================================================
+    TuningParams getTuningParams() const;
 
+    void setTuningParams(const TuningParams &tp);
     void setAlgorithm(Algorithm a) { algorithm = a; }
-    Algorithm getAlgorithm() const { return algorithm; }
-
     void setDt(double t) { dt = t; }
-
-    double getDt() const { return dt; }
-
     void setRobotState(RobotState state) { currentState = state; }
-
-    RobotState getRobotState() const { return currentState; }
-
-    PoseState getPoseState() const { return robot_state; }
-
-    std::vector<double> getLocalGoalCfg() { return local_goal; }
-    std::vector<double> getGlobalGoalCfg() { return global_goal; }
-
-    std::vector<std::vector<double> > getDataMap() { return map; }
-
-    // Get robot footprint (physical dimensions for collision checking)
-    Footprint getFootprint() const;
-
-    // Get velocity constraints (speed limits for trajectory generation)
-    VelocityLimits getVelocityLimits() const;
-
-    // Raw laser points in robot frame
-    const std::vector<Eigen::Vector2f> &getLaserPoints() const { return laserData; }
-
-    // Legacy: laser data as double vectors
-    std::vector<std::vector<double> > getLaserData();
-
-    std::vector<std::vector<double> > getCostmapDataOdom() const { return costmapDataOdom; }
-
-    double getVelocity() const { return robot_state.velocity_; }
-    double getAngularVelocity() const { return robot_state.angular_velocity_; }
-
-    TuningParams setTuningParams() const;
-
-    ros::Publisher Control() { return cmd_vel_pub; }
-    costmap_2d::Costmap2DROS *getCostMap() { return costmap; }
-
-    //==========================================================================
-    // CORE FUNCTIONALITY
-    //==========================================================================
-
-    // Prepare map and caches for planning cycle
-    bool setup();
-
-    // Load map data from specified source and verify availability
-    bool getMapData();
-
-    // Select and populate active map (laser/costmap)
-
-    // Set local goal in both robot and odom frames
     void setLocalGoal(std::vector<double> &lg, double x, double y) {
         local_goal = {lg[0], lg[1]};
         local_goal_odom = {x, y};
     }
 
-    // Trigger recovery behavior
-    void triggerRecovery();
+    Algorithm getAlgorithm() const { return algorithm; }
+    RobotState getRobotState() const { return currentState; }
+    PoseState getPoseState() const { return robot_state; }
+    double getDt() const { return dt; }
+    double getVelocity() const { return robot_state.velocity_; }
+    double getAngularVelocity() const { return robot_state.angular_velocity_; }
+    bool getMapData();
 
-    void resetStoppedStatus();
+    std::vector<double> getLocalGoalCfg() { return local_goal; }
+    std::vector<double> getGlobalGoalCfg() { return global_goal; }
 
-    // Check if Gazebo is paused
-    bool checkGazeboPaused() const;
+    const std::vector<Eigen::Vector2f> &getLaserPoints() const { return laserData; }
+    std::vector<std::vector<double> > getLaserData();  // Legacy: laser data as double vectors
+    std::vector<std::vector<double> > getCostmapDataOdom() const { return costmapDataOdom; }
+    std::vector<std::vector<double> > getDataMap() { return map; }
 
-    // Publish current state as text
+    Footprint getFootprint() const;
+    VelocityLimits getVelocityLimits() const;
+
+    costmap_2d::Costmap2DROS *getCostMap() { return costmap; }
+
+    bool setup();  // Prepare map and caches for planning cycle
+    bool checkGazeboPaused() const;  // Check if Gazebo simulation is paused
+
+    void triggerRecovery();  // Trigger recovery behavior
+    void resetStoppedStatus();  // Reset stopped status flag
+    void update_angular_velocity();  // Update angular velocity limits dynamically
+
+    ros::Publisher Control() { return cmd_vel_pub; }
     void publishRobotState() const;
+    void publishSmoothedPath(const std::vector<double> &xhat, const std::vector<double> &yhat) const;
+    void publishTuningParams() const;
 
-    // Update angular velocity limits dynamically
-    void update_angular_velocity();
+    void view_Goal(std::vector<double> &goal, std::vector<double> &goal1) const;  // Visualize global & local goals
+    void viewTrajectories(std::vector<PoseState> &trajectories, int nr_steps_, double theta_, std::vector<double> &t) const;
+    void viewTrajectories(std::vector<PoseState> &trajectories, int nr_steps_, std::vector<double> &t) const;
 
-    // Visualization helpers
-    void view_Goal(std::vector<double> &goal, std::vector<double> &goal1) const;
-
-    void viewTrajectories(std::vector<PoseState> &trajectories, int nr_steps_,
-                          double theta_, std::vector<double> &t) const;
-
-    void viewTrajectories(std::vector<PoseState> &trajectories, int nr_steps_,
-                          std::vector<double> &t) const;
-
-    // Utility: compute angle to point
     static double calculateTheta(const PoseState &state, const std::vector<double> &y);
 
-    //==========================================================================
-    // PUBLIC STATE (for legacy planner access)
-    //==========================================================================
-
-    // Transient state flags
     bool canBeSolved{};
-    bool getGoal{};
-    bool can_move{};
+    bool local_goal_received{};
+    bool global_goal_received{};
     bool param_received{};
 
-    // Current modes
     Algorithm algorithm;
     MapSource currentMap;
     RobotState currentState;
 
-    // Timing
     double dt{};
     double rotating_angle;
-
-    // Obstacle distances
     double front_obs{};
     double latter_obs{};
 
-    // Recovery state
     int recover_times = 0;
     int re = 1;
-
     int recover_to_low_count = 0;
     double dynamic_recovery_wait_time = 0.5;
 
-    // Paths and goals
     std::vector<std::vector<double> > local_paths;
     std::vector<std::vector<double> > local_paths_odom;
     std::vector<std::vector<double> > local_goals_history;
@@ -269,18 +215,18 @@ public:
 
     std::vector<std::vector<geometry_msgs::Point> > polygons;
 
-    // Map data
     std::vector<std::vector<double> > costmapDataOdom;
     std::vector<std::vector<double> > costmapData;
     std::vector<double> laserDataDistance;
 
-    // Time intervals for trajectory prediction
+
     std::vector<double> timeInterval = {
         0.0302, 0.0495, 0.0608, 0.0697, 0.0771, 0.0835, 0.0893, 0.0946, 0.0994, 0.1039,
         0.1082, 0.1122, 0.1160, 0.1196, 0.1231, 0.1264, 0.1296, 0.1327, 0.1357, 0.1386
     };
 
-    // Tuning parameters (modifiable by external parameter server)
+
+    // DWA parameters
     double max_vel_x = 2.0;
     double max_vel_y = 0.0;
     double max_vel_theta = 3.0;
@@ -288,6 +234,8 @@ public:
     double vTheta_samples = 10;
     double path_distance_bias = 0.7;
     double goal_distance_bias = 0.7;
+
+    // MPPI/DDP parameters
     double nr_pairs_ = 600;
     double nr_steps_ = 20;
     double linear_stddev = 0.1;
@@ -296,48 +244,23 @@ public:
     double local_goal_distance = 2.0;
     double distance = 0.3;
     double robot_radius_ = 0.01;
-    int num_threads = 8;  // Number of parallel threads for all planners
 
-    // ROS node handle (public for convenience)
+    int num_threads = 8;
+
     ros::NodeHandle nh;
 
-    // Publishers
     ros::Publisher trajectory_pub;
     ros::Publisher global_path_pub;
+    ros::Publisher smoothed_global_path_pub;
     ros::Publisher local_goal_pub;
     ros::Publisher global_goal_pub;
+    ros::Publisher tuning_params_pub;
 
-    // Callback handler (needs to be after nh declaration)
     std::shared_ptr<JackalCallbacks> callbacks_;
 
-    // Async task executor for heavy callbacks (vision, global planning, etc.)
     std::shared_ptr<AsyncTaskExecutor> async_executor_;
 
 protected:
-    //==========================================================================
-    // ROS CALLBACKS
-    //==========================================================================
-
-    // ROS callback forwarders - implemented in Jackal.cpp
-    void robotStatusCallback(const nav_msgs::Odometry::ConstPtr &msg);
-
-    void laserScanCallback(const sensor_msgs::LaserScan::ConstPtr &msg);
-
-    void costmapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg);
-
-    void globalPathCallback(const nav_msgs::Path::ConstPtr &msg);
-
-    void arrayCallback(const std_msgs::Float64MultiArray::ConstPtr &msg);
-
-    void paramsCallback(const std_msgs::Float64MultiArray::ConstPtr &msg);
-
-    void goalCallback(const move_base_msgs::MoveBaseActionGoal::ConstPtr &msg);
-
-    void velocityCallback(const nav_msgs::Odometry::ConstPtr &msg);
-
-    //==========================================================================
-    // PROTECTED STATE
-    //==========================================================================
 
     // ROS communication
     ros::Subscriber robot_pose_sub;
@@ -359,6 +282,8 @@ protected:
     costmap_2d::Costmap2DROS *costmap{};
 
     // Internal state
+    // Authoritative tuning parameter snapshot
+    TuningParams tuning_params_{};
     std::vector<double> global_goal;
     std::vector<double> local_goal;
     std::vector<double> costmapDataDistance;
@@ -389,42 +314,5 @@ protected:
     static constexpr double POINT_MASS_LENGTH = 0.02;
     static constexpr double POINT_MASS_WIDTH = 0.02;
 };
-
-//==============================================================================
-// INLINE CALLBACK IMPLEMENTATIONS (after class definition)
-//==============================================================================
-#include "Jackal_callbacks.hpp"
-
-inline void Robot_config::robotStatusCallback(const nav_msgs::Odometry::ConstPtr &msg) {
-    callbacks_->robotStatusCallback(msg);
-}
-
-inline void Robot_config::laserScanCallback(const sensor_msgs::LaserScan::ConstPtr &msg) {
-    callbacks_->laserScanCallback(msg);
-}
-
-inline void Robot_config::costmapCallback(const nav_msgs::OccupancyGrid::ConstPtr &msg) {
-    callbacks_->costmapCallback(msg);
-}
-
-inline void Robot_config::globalPathCallback(const nav_msgs::Path::ConstPtr &msg) {
-    callbacks_->globalPathCallback(msg);
-}
-
-inline void Robot_config::arrayCallback(const std_msgs::Float64MultiArray::ConstPtr &msg) {
-    callbacks_->arrayCallback(msg);
-}
-
-inline void Robot_config::paramsCallback(const std_msgs::Float64MultiArray::ConstPtr &msg) {
-    callbacks_->paramsCallback(msg);
-}
-
-inline void Robot_config::goalCallback(const move_base_msgs::MoveBaseActionGoal::ConstPtr &msg) {
-    callbacks_->goalCallback(msg);
-}
-
-inline void Robot_config::velocityCallback(const nav_msgs::Odometry::ConstPtr &msg) {
-    callbacks_->velocityCallback(msg);
-}
 
 #endif // DYNAMICS_PLANNER_NAV_JACKAL_HPP

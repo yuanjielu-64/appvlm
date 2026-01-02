@@ -1,24 +1,73 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Changelog for package jackal_description
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-0.7.9 (2022-03-08)
+
+0.8.10 (2024-05-24)
+-------------------
+
+0.8.9 (2024-02-14)
+------------------
+* Fixed origin pose values.
+* Contributors: Tony Baltovski
+
+0.8.8 (2023-06-05)
+------------------
+* change location of onav config
+* added outdoornav enable variable and hardware kit selector for urdf
+* Contributors: José Mastrangelo
+
+0.8.7 (2023-04-19)
+------------------
+* Added Environment Variables
+* Contributors: luis-camero
+
+0.8.6 (2022-11-16)
+------------------
+* Set the GPS plugin's reference heading to 90 so it's ENU
+* Use xacro properties defined from environment variables for Microstrain URDF (`#123 <https://github.com/jackal/jackal/issues/123>`_)
+* Add GAZEBO_WORLD\_{LAT|LON} envars to change the reference coordinate of the robot's integral GPS
+* Contributors: Chris Iverach-Brereton, Joey Yang
+
+0.8.5 (2022-05-17)
+------------------
+* Added Blackfly  entry to URDF
+* Added Blackfly description to package.xml
+* Contributors: Luis Camero
+
+0.8.4 (2022-05-09)
 ------------------
 
-
-0.7.8 (2022-01-18)
+0.8.3 (2022-03-08)
 ------------------
+* Added the option to remove tower from VLP16 mount
+* Added SICK TIM551 to URDF and package.xml
+* Added UTM30 (`#106 <https://github.com/jackal/jackal/issues/106>`_)
+* Updated Navsat and LMS1xx mounts (`#103 <https://github.com/jackal/jackal/issues/103>`_)
+  * Updated hokuyo_ust10_mount to include min and max angle
+  * Removed extra spaces
+  * Updated SICK LMS1XX mount and NAVSAT mount
+  * Maintained backward compatibility with LMS1xx standard upright poisition by adding mount types
+* Updated hokuyo_ust10_mount to include min and max angle (`#102 <https://github.com/jackal/jackal/issues/102>`_)
+  * Updated hokuyo_ust10_mount to include min and max angle
+  * Removed extra spaces
+* Contributors: Luis Camero, luis-camero
 
-0.7.7 (2021-10-01)
+0.8.2 (2022-02-15)
 ------------------
-* Fix the custom_example URDF file to the LMS1xx sensors don't throw errors
-* Enable roslaunch_add_file_check when CATKIN_ENABLE_TESTING=true
-* Added velodyne towers and HDL-32E sensor (#88)
-* Contributors: Chris I-B, Luis Camero, PN:Ruichao Wu2
+* Moved microstrain link to accessories.urdf and updated envvars
+* Added velodyne tower mesh
+* Added Microstrain GX5 to description
+* Removed unnecessary URDF
+* Added Wibotic mesh and STL
+* Contributors: Luis Camero
 
-0.7.6 (2021-07-18)
+0.8.1 (2022-01-18)
 ------------------
-* cpr urdf extras
-* Contributors: Ebrahim Shahrivar
+* Updated to match melodic-devel
+* Contributors: Luis Camero
+
+0.8.0 (2021-04-23)
+------------------
 
 0.7.5 (2021-03-24)
 ------------------

@@ -45,7 +45,7 @@
 
   <node pkg="jackal_helper" type="collision_publisher_node" name="collision_publisher_node" />
 
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find barn_challenge_lu)/rviz/a.rviz" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dynamics_planner_nav)/rviz/a.rviz" />
 
 
 

@@ -31,13 +31,10 @@ namespace Antipatrea {
 
     class MPPIPlanner {
     public:
-        MPPIPlanner(void) {
-        }
+        MPPIPlanner() = default;
+        virtual ~MPPIPlanner() = default;
 
-        virtual ~MPPIPlanner(void) {
-        }
-
-        virtual bool Solve(const int nrIters, const double dt, bool &canBeSolved);
+        virtual bool Solve(int nrIters, double dt, bool &canBeSolved);
 
         class Cost {
         public:
@@ -46,8 +43,6 @@ namespace Antipatrea {
             Cost(double obs_cost, double to_goal_cost, double speed_cost, double path_cost, double ori_cost,
                  double aw_cost,
                  double total_cost);
-
-            void show() const;
 
             void calc_total_cost();
 
@@ -75,17 +70,17 @@ namespace Antipatrea {
         public:
             Window();
 
-            void show() const;
-
             double min_velocity_;
             double max_velocity_;
             double min_angular_velocity_;
             double max_angular_velocity_;
         };
 
-        Robot_config *robot;
+        Robot_config *robot = nullptr;
 
     protected:
+        void updateRobotState();
+
         virtual void commonParameters(Robot_config &robot);
 
         virtual void frontBackParameters(Robot_config &robot);
@@ -106,8 +101,6 @@ namespace Antipatrea {
 
         virtual void publishCommand(geometry_msgs::Twist &cmd_vel, double linear, double angular);
 
-        virtual bool hasRotateFirst(PoseState &state, PoseState &state_odom, double angle_to_goal);
-
         virtual double recover(PoseState &state, PoseState &state_odom,
                               std::pair<std::vector<PoseState>, bool> &best_traj, bool &results);
 
@@ -115,18 +108,8 @@ namespace Antipatrea {
             double carX, double carY, double cosTheta, double sinTheta,
             double halfLength, double halfWidth, const std::vector<double> &obs);
 
-        virtual bool collisionCheck(std::vector<PoseState> &trajectory);
-
         virtual bool mppi_planning(PoseState &state, PoseState &state_odom,
                                   std::pair<std::vector<PoseState>, bool> &best_traj, double dt);
-
-        virtual RobotBox calculateMovingBoundingBox(const PoseState &state1, const PoseState &state2,
-                                                    double robot_width, double robot_length);
-
-        virtual bool isBoxIntersectingBox(const RobotBox &bbox1, const std::vector<double> &obs) {
-            return !(bbox1.x_max < obs[0] || bbox1.x_min > obs[0] ||
-                     bbox1.y_max < obs[1] || bbox1.y_min > obs[1]);
-        }
 
         virtual std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
             PoseState &state, PoseState &state_odom, double angular_velocity);
@@ -136,6 +119,8 @@ namespace Antipatrea {
 
         virtual std::pair<std::vector<PoseState>, std::vector<PoseState> > generateTrajectory(
             PoseState &state, PoseState &state_odom, double v, double w);
+
+        virtual bool isBoxIntersectingBox(const RobotBox &bbox1, const std::vector<double> &obs);
 
         virtual double updateVelocity(double current, double target, double maxAccel, double minAccel, double t);
 
@@ -150,23 +135,7 @@ namespace Antipatrea {
 
         virtual bool invertMatrix(std::vector<std::vector<double>>& mat);
 
-        virtual void getTrajBySavitzkyGolayFilter(std::pair<std::vector<PoseState>, std::vector<PoseState>> &trajectories) {
-            std::vector<double> x;
-            std::vector<double> y;
-
-            for (auto & i : trajectories.first) {
-                x.push_back(i.x_);
-                y.push_back(i.y_);
-            }
-
-            std::vector<double> x_ = savitzkyGolayFilter(x, 5, 2);
-            std::vector<double> y_ = savitzkyGolayFilter(y, 5, 2);
-
-            for (int i = 0; i < trajectories.first.size(); i++) {
-                trajectories.first[i].x_ = x_[i];
-                trajectories.first[i].y_ = y_[i];
-            }
-        }
+        virtual void getTrajBySavitzkyGolayFilter(std::pair<std::vector<PoseState>, std::vector<PoseState>> &trajectories);
 
         virtual std::vector<double> savitzkyGolayFilter(const std::vector<double>& data, int window_size, int poly_order);
 
@@ -221,7 +190,7 @@ namespace Antipatrea {
 
         int v_steps_ = 20;
         int w_steps_ = 20;
-        int state_dims = 5;
+        // removed unused: state_dims
 
         PoseState parent;
         PoseState parent_odom;
@@ -246,11 +215,9 @@ namespace Antipatrea {
         double dt;
         double n;
 
-        std::mutex mtx;
-
+        // mtx was unused
         std::vector<std::vector<double> > local_paths;
 
-        // MPPI历史最优控制序列 [step][v, w]
         std::vector<std::pair<double, double>> u_optimal_;
         bool has_previous_solution_ = false;
     };

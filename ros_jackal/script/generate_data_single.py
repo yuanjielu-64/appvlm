@@ -134,7 +134,7 @@ def main(id):
 
     print(">>>>>>>>>>>>>> Running on %s <<<<<<<<<<<<<<<<" %(world_name))
 
-    num_trials = 1
+    num_trials = 100
     ep = 0
 
     while ep < num_trials:
@@ -155,7 +155,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = 'start an actor')
     parser.add_argument('--id', dest='actor_id', type = int, default = 0)
     #parser.add_argument('--policy_name', dest='policy_name', default="move_base")
-    parser.add_argument('--policy_name', dest='policy_name', default="dwa_heurstic")
+    parser.add_argument('--policy_name', dest='policy_name', default="ddp_heurstic")
     parser.add_argument('--buffer_path', dest='buffer_path', default="../buffer/")
     parser.add_argument('--world_path', dest='world_path', default="../jackal_helper/worlds/BARN/")
 

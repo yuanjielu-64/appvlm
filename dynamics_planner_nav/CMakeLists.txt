@@ -7,6 +7,7 @@ if(POLICY CMP0148)
   cmake_policy(SET CMP0148 OLD)
 endif()
 
+# Prefer target-level standard; keep global for catkin compatibility
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -43,28 +44,19 @@ catkin_package(
 )
 
 include_directories(
-    ${catkin_INCLUDE_DIRS}
-    ${EIGEN3_INCLUDE_DIR}
-    ${OpenCV_INCLUDE_DIRS}
-    src
+  ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
+  ${OpenCV_INCLUDE_DIRS}
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-## Collect source files
-file(GLOB ROBOT_SOURCES src/robot/*.cpp)
-file(GLOB LOCAL_PLANNER_SOURCES src/localPlanners/*.cpp)
-file(GLOB GLOBAL_PLANNER_SOURCES src/globalPlanners/*.cpp)
+## Collect source files (track directory changes)
+# CONFIGURE_DEPENDS makes CMake re-scan when files are added/removed
+file(GLOB ROBOT_SOURCES CONFIGURE_DEPENDS src/robot/*.cpp)
+file(GLOB LOCAL_PLANNER_SOURCES CONFIGURE_DEPENDS src/localPlanners/*.cpp)
+file(GLOB GLOBAL_PLANNER_SOURCES CONFIGURE_DEPENDS src/globalPlanners/*.cpp)
+file(GLOB UTILS_SOURCES CONFIGURE_DEPENDS src/utils/*.cpp)
 
-# Ensure new modular units are compiled even if CMake glob cache lags
-list(APPEND ROBOT_SOURCES
-        src/robot/Jackal_publishers.cpp
-    src/robot/Jackal_callbacks.cpp
-)
-
-# Only include essential Utils files needed by planners
-set(UTILS_SOURCES
-    src/utils/Algebra.cpp
-    src/utils/PseudoRandom.cpp
-)
 
 ## Build main executable
 add_executable(${PROJECT_NAME}_node
@@ -81,6 +73,11 @@ target_link_libraries(${PROJECT_NAME}_node
     ${OpenCV_LIBS}
     pthread
 )
+
+# Modern CMake target properties
+target_compile_features(${PROJECT_NAME}_node PRIVATE cxx_std_17)
+
+# Utils sources are included directly in the target above
 
 add_dependencies(${PROJECT_NAME}_node
     ${${PROJECT_NAME}_EXPORTED_TARGETS}

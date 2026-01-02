@@ -21,6 +21,7 @@
   <xacro:include filename="$(find lms1xx)/urdf/sick_lms1xx.urdf.xacro" />
   <xacro:include filename="$(find jackal_description)/urdf/accessories/sick_lms1xx_inverted_mount.urdf.xacro" />
   <xacro:include filename="$(find jackal_description)/urdf/accessories/sick_lms1xx_upright_mount.urdf.xacro" />
+  <xacro:include filename="$(find jackal_description)/urdf/accessories/hokuyo_utm30.urdf.xacro" />
   <xacro:include filename="$(find jackal_description)/urdf/accessories/hokuyo_ust10.urdf.xacro" />
   <xacro:include filename="$(find jackal_description)/urdf/accessories/vlp16_mount.urdf.xacro" />
   <xacro:include filename="$(find jackal_description)/urdf/accessories/hdl32_mount.urdf.xacro" />
@@ -29,19 +30,11 @@
     Add Microstrain IMU. By default the Jackal comes equipped with an IMU linked to "imu_link". These extra
     optional microstrain IMU's will be added to another frame, by default, "microstrain_link".
   -->
-  <xacro:property name="microstrain_enable" value="$(optenv JACKAL_GX5_IMU 0)"/>
-  <xacro:property name="microstrain_enable" value="$(optenv JACKAL_IMU_MICROSTRAIN ${microstrain_enable})" lazy_eval="false"/>
-  <xacro:if value="${microstrain_enable}">
+  <xacro:if value="$(optenv JACKAL_IMU_MICROSTRAIN 0)">
     <xacro:property name="frame"  value="$(optenv JACKAL_IMU_MICROSTRAIN_LINK microstrain_link)"/>
-  
-    <xacro:property name="parent" value="$(optenv JACKAL_GX5_IMU_PARENT base_link)"/>
-    <xacro:property name="parent" value="$(optenv JACKAL_IMU_MICROSTRAIN_PARENT ${parent})" lazy_eval="false"/>
-
-    <xacro:property name="xyz"    value="$(optenv JACKAL_GX5_IMU_OFFSET -0.139 0.096 0.100)"/>
-    <xacro:property name="xyz"    value="$(optenv JACKAL_IMU_MICROSTRAIN_OFFSET ${xyz})" lazy_eval="false"/>
-
-    <xacro:property name="rpy"    value="$(optenv JACKAL_GX5_IMU_RPY ${PI} 0 -${PI/2})"/>
-    <xacro:property name="rpy"    value="$(optenv JACKAL_IMU_MICROSTRAIN_RPY ${rpy})" lazy_eval="false"/>
+    <xacro:property name="parent" value="$(optenv JACKAL_IMU_MICROSTRAIN_PARENT base_link)"/>
+    <xacro:property name="xyz"    value="$(optenv JACKAL_IMU_MICROSTRAIN_OFFSET -0.139 0.096 0.100)"/>
+    <xacro:property name="rpy"    value="$(optenv JACKAL_IMU_MICROSTRAIN_RPY ${PI} 0 -${PI/2})"/>
     <link name="${frame}" />
     <joint name="${frame}_joint" type="fixed">
       <parent link="${parent}" />
@@ -55,6 +48,7 @@
     JACKAL_LASER_MODEL and JACKAL_LASER_SECONDARY_MODEL environment variables. Valid model designations are:
     - lms1xx (default) :: SICK LMS1xx
     - ust10            :: Hokuyo UST10
+    - utm30            :: Hokuyo UTM30
   -->
   <!-- Primary 2D Lidar -->
   <xacro:if value="$(optenv JACKAL_LASER 0)">
@@ -112,6 +106,12 @@
         <origin xyz="$(optenv JACKAL_LASER_OFFSET 0 0 0)" rpy="$(optenv JACKAL_LASER_RPY 0 0 0)" />
       </xacro:hokuyo_ust10_mount>
     </xacro:if>
+    <!-- Hokuyo UTM30 -->
+    <xacro:if value="${lidar_model == 'utm30'}">
+      <xacro:hokuyo_utm30_mount topic="${topic}" prefix="${prefix}" parent_link="${parent}">
+        <origin xyz="$(optenv JACKAL_LASER_OFFSET 0 0 0)" rpy="$(optenv JACKAL_LASER_RPY 0 0 0)" />
+      </xacro:hokuyo_utm30_mount>
+    </xacro:if>
   </xacro:if>
 
   <!-- Secondary 2D Lidar -->
@@ -161,6 +161,12 @@
       <xacro:hokuyo_ust10_mount topic="${topic}" prefix="${prefix}" parent_link="${parent}">
         <origin xyz="$(optenv JACKAL_LASER_SECONDARY_OFFSET 0 0 0)" rpy="$(optenv JACKAL_LASER_SECONDARY_RPY 0 0 3.14159)" />
       </xacro:hokuyo_ust10_mount>
+    </xacro:if>
+    <!-- Hokuyo UTM30 -->
+    <xacro:if value="${lidar_model == 'utm30'}">
+      <xacro:hokuyo_utm30_mount topic="${topic}" prefix="${prefix}" parent_link="${parent}">
+        <origin xyz="$(optenv JACKAL_LASER_SECONDARY_OFFSET 0 0 0)" rpy="$(optenv JACKAL_LASER_SECONDARY_RPY 0 0 3.14159)" />
+      </xacro:hokuyo_utm30_mount>
     </xacro:if>
   </xacro:if>
 
@@ -403,6 +409,21 @@
         <child link="${prefix}_camera" />
       </joint>
     </xacro:unless>
+  </xacro:if>
+
+  <!-- BlackflyS Camera -->
+  <xacro:include filename="$(find flir_camera_description)/urdf/flir_blackflys.urdf.xacro"/>
+  <xacro:if value="$(optenv JACKAL_BLACKFLY 0)">
+    <xacro:property name="prefix" value="$(optenv JACKAL_BLACKFLY_PREFIX front_camera)"/>
+    <xacro:property name="parent" value="$(optenv JACKAL_BLACKFLY_PARENT front_mount)"/>
+    <xacro:property name="xyz"    value="$(optenv JACKAL_BLACKFLY_OFFSET 0 0 0)"/>
+    <xacro:property name="rpy"    value="$(optenv JACKAL_BLACKFLY_RPY    0 0 0)"/>
+    <xacro:flir_blackflys frame="${prefix}"/>
+    <joint name="${prefix}_mount_joint" type="fixed">
+      <child link="${prefix}"/>
+      <parent link="${parent}"/>
+      <origin xyz="${xyz}" rpy="${rpy}" />
+    </joint>
   </xacro:if>
 
   <!-- Fender Accessories --> 

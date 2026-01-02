@@ -12,7 +12,7 @@ JackalCallbacks::JackalCallbacks(Robot_config* robot) : robot_(robot) {}
 // ODOMETRY CALLBACK
 //==============================================================================
 
-void JackalCallbacks::robotStatusCallback(const nav_msgs::Odometry::ConstPtr& msg) {
+void JackalCallbacks::odometryCallback(const nav_msgs::Odometry::ConstPtr& msg) {
     double q1 = msg->pose.pose.orientation.x;
     double q2 = msg->pose.pose.orientation.y;
     double q3 = msg->pose.pose.orientation.z;
@@ -166,14 +166,10 @@ void JackalCallbacks::goalCallback(const move_base_msgs::MoveBaseActionGoal::Con
     robot_->global_goal_odom = {msg->goal.target_pose.pose.position.x,
                                  msg->goal.target_pose.pose.position.y};
     robot_->setRobotState(Robot_config::NORMAL_PLANNING);
-    robot_->can_move = true;
+    robot_->global_goal_received = true;
 }
 
-//==============================================================================
-// ARRAY CALLBACK (Dynamic Time Interval)
-//==============================================================================
-
-void JackalCallbacks::arrayCallback(const std_msgs::Float64MultiArray::ConstPtr& msg) {
+void JackalCallbacks::timeIntervalCallback(const std_msgs::Float64MultiArray::ConstPtr& msg) {
     if (msg->data.empty()) {
         ROS_WARN("Received empty dynamics data");
         return;
@@ -183,282 +179,89 @@ void JackalCallbacks::arrayCallback(const std_msgs::Float64MultiArray::ConstPtr&
     robot_->timeInterval = msg->data;
 }
 
-//==============================================================================
-// PARAMS CALLBACK (Tuning Parameters)
-//==============================================================================
-
 void JackalCallbacks::paramsCallback(const std_msgs::Float64MultiArray::ConstPtr& msg) {
-    if (robot_->getAlgorithm() == Robot_config::DWA) {
-        if (msg->data.empty()) {
-            ROS_WARN("Received empty dynamics data");
-            return;
-        }
+    robot_->param_received = false;
 
-        robot_->max_vel_x = msg->data[0];
-        robot_->max_vel_theta = msg->data[1];
-        robot_->vx_sample = msg->data[2];
-        robot_->vTheta_samples = msg->data[3];
-        robot_->path_distance_bias = msg->data[4];
-        robot_->goal_distance_bias = msg->data[5];
+    if (msg->data.empty()) {
+        ROS_WARN("Received empty params, we use initial params");
+        return;
     }
 
-    if (robot_->getAlgorithm() == Robot_config::MPPI ||
-        robot_->getAlgorithm() == Robot_config::MPPI_DDP) {
-        if (msg->data.empty()) {
-            ROS_WARN("Received empty dynamics data");
-            return;
-        }
+    // Start from current snapshot, then override fields provided in message
+    auto tp = robot_->getTuningParams();
 
-        robot_->max_vel_x = msg->data[0];
-        robot_->max_vel_theta = msg->data[1];
-        robot_->nr_pairs_ = msg->data[2];
-        robot_->nr_steps_ = msg->data[3];
-        robot_->linear_stddev = msg->data[4];
-        robot_->angular_stddev = msg->data[5];
-        robot_->lambda = msg->data[6];
+    switch (robot_->getAlgorithm()) {
+        case Robot_config::DWA: {
+            if (msg->data.size() < 6) {
+                ROS_WARN("DWA params expect >=6 values [max_vx, max_w, vx_samples, w_samples, path_bias, goal_bias]");
+                return;
+            }
+            tp.max_vel_x         = msg->data[0];
+            tp.max_vel_theta     = msg->data[1];
+            tp.vx_sample         = static_cast<int>(msg->data[2]);
+            tp.vTheta_samples    = static_cast<int>(msg->data[3]);
+            tp.path_distance_bias= msg->data[4];
+            tp.goal_distance_bias= msg->data[5];
+            break;
+        }
+        case Robot_config::MPPI: {
+            if (msg->data.size() < 7) {
+                ROS_WARN("MPPI params expect >=7 values [max_vx, max_w, nr_pairs, nr_steps, lin_std, ang_std, lambda]");
+                return;
+            }
+            tp.max_vel_x      = msg->data[0];
+            tp.max_vel_theta  = msg->data[1];
+            tp.nr_pairs_      = static_cast<int>(msg->data[2]);
+            tp.nr_steps_      = static_cast<int>(msg->data[3]);
+            tp.linear_stddev  = msg->data[4];
+            tp.angular_stddev = msg->data[5];
+            tp.lambda         = msg->data[6];
+            break;
+        }
+        case Robot_config::DDP: {
+            if (msg->data.size() < 5) {
+                ROS_WARN("DDP params expect >=5 values [max_vx, max_w, nr_pairs, distance, radius]");
+                return;
+            }
+            tp.max_vel_x     = msg->data[0];
+            tp.max_vel_theta = msg->data[1];
+            tp.nr_pairs_     = static_cast<int>(msg->data[2]);
+            tp.distance      = msg->data[3];
+            tp.robot_radius_ = msg->data[4];
+            break;
+        }
+        default:
+            break;
     }
 
-    if (robot_->getAlgorithm() == Robot_config::DDP) {
-        if (msg->data.empty()) {
-            ROS_WARN("Received empty dynamics data");
-            return;
-        }
-
-        robot_->max_vel_x = msg->data[0];
-        robot_->max_vel_theta = msg->data[1];
-        robot_->nr_pairs_ = msg->data[2];
-        robot_->distance = msg->data[3];
-        robot_->robot_radius_ = msg->data[4];
-    }
-
+    robot_->setTuningParams(tp);
+    robot_->publishTuningParams();
     robot_->param_received = true;
 }
 
 //==============================================================================
-// GLOBAL PATH CALLBACK
+// GLOBAL PATH CALLBACK - Main Entry Point
 //==============================================================================
 
 void JackalCallbacks::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
-    // Start to find local and global goal
+    // Initialize global goal if not set (first-time setup)
     if (robot_->global_goal_odom.empty()) {
         robot_->global_goal_odom = {0, 10};
         robot_->setRobotState(Robot_config::NORMAL_PLANNING);
         return;
     }
 
-    robot_->getGoal = true;
-
+    robot_->local_goal_received = true;
     robot_->local_paths.clear();
     robot_->local_paths_odom.clear();
-    std::vector<double> goals;
-    goals.reserve(2);
 
-    if ((int)msg->poses.size() == 0) {
-        if (robot_->local_goals_history.size() >= 2) {
-            std::vector<double> lg = transform_lg(
-                robot_->local_goals_history[0][0], robot_->local_goals_history[0][1],
-                robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-
-            robot_->setLocalGoal(lg, robot_->local_goals_history[0][0], robot_->local_goals_history[0][1]);
-
-            robot_->local_paths_history.erase(robot_->local_paths_history.begin());
-            robot_->local_goals_history.erase(robot_->local_goals_history.begin());
-
-            robot_->view_Goal(robot_->global_goal_odom, robot_->local_goal_odom);
-
-            return;
-        }
-
-        if (!robot_->local_paths_history.empty()) {
-            // We have the last goal here
-            goals = {robot_->global_goal_odom[0], robot_->global_goal_odom[1]};
-
-            std::vector<double> lg;
-            std::vector<double> X, Y;
-
-            int close_id = -1;
-            double min_distance = INFINITY;
-            double threads = 1;
-            for (size_t i = 0; i < robot_->local_paths_history[0].size(); ++i) {
-                lg = transform_lg(robot_->local_paths_history[0][i][0], robot_->local_paths_history[0][i][1],
-                                 robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                double distance = sqrt(lg[0] * lg[0] + lg[1] * lg[1]);
-                if (distance < min_distance) {
-                    min_distance = distance;
-                    close_id = (int)i;
-                }
-                X.push_back(lg[0]);
-                Y.push_back(lg[1]);
-            }
-
-            std::vector<std::vector<double>> paths = {{robot_->robot_state.x_, robot_->robot_state.y_}};
-            for (size_t i = close_id; i < X.size(); ++i) {
-                std::vector<double> vector = {robot_->local_paths_history[0][i][0], robot_->local_paths_history[0][i][1]};
-                paths.push_back(vector);
-            }
-
-            robot_->local_paths_odom = paths;
-
-            bool flag = false;
-            double length = l2_distance(X[close_id], Y[close_id], 0, 0);
-
-            for (size_t i = close_id; i < X.size(); ++i) {
-                double dist = l2_distance(X[i], Y[i], X[i - 1], Y[i - 1]);
-
-                length += dist;
-
-                if (length >= std::max(threads - 0.08 * robot_->re, 0.2) && flag == false) {
-                    lg = {X[i], Y[i]};
-                    // Safety check to prevent out-of-bounds access
-                    if (i < robot_->local_paths_history[0].size()) {
-                        robot_->setLocalGoal(lg, robot_->local_paths_history[0][i][0], robot_->local_paths_history[0][i][1]);
-                    } else {
-                        ROS_WARN("Index %zu out of bounds for local_paths_history[0] (size: %zu)",
-                                i, robot_->local_paths_history[0].size());
-                    }
-                    flag = true;
-                    break;
-                }
-            }
-
-            if (!flag) {
-                lg = transform_lg(robot_->global_goal_odom[0], robot_->global_goal_odom[1],
-                                 robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                robot_->setLocalGoal(lg, robot_->global_goal_odom[0], robot_->global_goal_odom[1]);
-            }
-
-            robot_->view_Goal(goals, robot_->local_goal_odom);
-            robot_->update_angular_velocity();
-            return;
-        }
+    // Branch 1: Handle empty path from global planner (use fallback strategies)
+    if (msg->poses.empty()) {
+        handleEmptyGlobalPath();
+        return;
     }
 
-    std::vector<std::pair<double, double>> path_points;
-
-    std::vector<double> X, Y;
-    for (const auto& pose : msg->poses) {
-        X.push_back(pose.pose.position.x);
-        Y.push_back(pose.pose.position.y);
-    }
-
-    std::vector<double> xhat = savgolFilter(X, 9, 2);
-    std::vector<double> yhat = savgolFilter(Y, 9, 2);
-
-    std::vector<double> lg = transform_lg(robot_->global_goal_odom[0],
-                                         robot_->global_goal_odom[1],
-                                         robot_->robot_state.x_,
-                                         robot_->robot_state.y_,
-                                         robot_->robot_state.theta_);
-
-    robot_->global_goal = lg;
-    goals = {robot_->global_goal_odom[0], robot_->global_goal_odom[1]};
-
-    std::vector<double> last_point = {INFINITY, INFINITY};
-
-    bool flag = false;
-    double thresholdSq = 0;
-
-    double length = 0;
-
-    for (size_t i = 1; i < xhat.size(); ++i) {
-        double dist = l2_distance(xhat[i], yhat[i], xhat[i - 1], yhat[i - 1]);
-
-        length += dist;
-
-        if (robot_->getAlgorithm() == Robot_config::DWA || robot_->getAlgorithm() == Robot_config::DWA_DDP) {
-            thresholdSq = 2 * robot_->max_vel_x + 1;
-
-            if (length >= thresholdSq && flag == false) {
-                lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                robot_->setLocalGoal(lg, xhat[i], yhat[i]);
-                flag = true;
-                break;
-            }
-        } else if (robot_->getAlgorithm() == Robot_config::MPPI || robot_->getAlgorithm() == Robot_config::MPPI_DDP) {
-            thresholdSq = 1.5 * robot_->max_vel_x;
-
-            if (length >= thresholdSq && flag == false) {
-                lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                robot_->setLocalGoal(lg, xhat[i], yhat[i]);
-                flag = true;
-                break;
-            }
-        } else {
-            if (robot_->getRobotState() == Robot_config::NORMAL_PLANNING) {
-                thresholdSq = 2 * robot_->max_vel_x + 2;
-                if (length >= thresholdSq && flag == false) {
-                    lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                    robot_->setLocalGoal(lg, xhat[i], yhat[i]);
-                    flag = true;
-                    break;
-                }
-            } else if (robot_->getRobotState() == Robot_config::LOW_SPEED_PLANNING) {
-                thresholdSq = 1 * robot_->max_vel_x + 1;
-
-                if (length >= thresholdSq && flag == false) {
-                    lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                    robot_->setLocalGoal(lg, xhat[i], yhat[i]);
-                    flag = true;
-                    break;
-                }
-            } else if (robot_->getRobotState() == Robot_config::NO_MAP_PLANNING) {
-                thresholdSq = robot_->max_vel_x;
-                if (length >= thresholdSq && flag == false) {
-                    lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                    robot_->setLocalGoal(lg, xhat[i], yhat[i]);
-                    flag = true;
-                    break;
-                }
-            } else {
-                thresholdSq = 0.8;
-                if (length >= thresholdSq && flag == false) {
-                    lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                    robot_->setLocalGoal(lg, xhat[i], yhat[i]);
-                    flag = true;
-                    break;
-                }
-            }
-        }
-    }
-
-    if (!flag) {
-        lg = transform_lg(robot_->global_goal_odom[0], robot_->global_goal_odom[1],
-                         robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-        robot_->setLocalGoal(lg, robot_->global_goal_odom[0], robot_->global_goal_odom[1]);
-    }
-
-    for (size_t i = 1; i < xhat.size(); ++i) {
-        if (last_point[0] != INFINITY) {
-            double dx = xhat[i] - last_point[0];
-            double dy = yhat[i] - last_point[1];
-            double distance = sqrt(dx * dx + dy * dy);
-
-            if (distance >= 0.1) {
-                lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
-                robot_->local_paths.emplace_back(std::vector<double>{lg[0], lg[1]});
-                robot_->local_paths_odom.emplace_back(std::vector<double>{xhat[i], yhat[i]});
-                last_point = {xhat[i], yhat[i]};
-            }
-        } else {
-            last_point = {xhat[i], yhat[i]};
-        }
-    }
-
-    if (!robot_->local_paths.empty() && !robot_->local_goal_odom.empty()) {
-        robot_->local_paths_history.push_back(robot_->local_paths_odom);
-        robot_->local_goals_history.push_back(robot_->local_goal_odom);
-
-        if (robot_->local_paths_history.size() > 30) {
-            robot_->local_paths_history.erase(robot_->local_paths_history.begin());
-        }
-
-        if (robot_->local_goals_history.size() > 30) {
-            robot_->local_goals_history.erase(robot_->local_goals_history.begin());
-        }
-    }
-
-    robot_->view_Goal(goals, robot_->local_goal_odom);
-    robot_->update_angular_velocity();
+    processValidGlobalPath(msg);
 }
 
 //==============================================================================
@@ -539,3 +342,204 @@ void JackalCallbacks::velocityCallback(const nav_msgs::Odometry::ConstPtr& msg) 
     }
 }
 
+//==============================================================================
+// HELPER: Compute lookahead distance threshold based on algorithm and state
+//==============================================================================
+double JackalCallbacks::computeLookaheadThreshold() const {
+    const auto algo = robot_->getAlgorithm();
+    const auto state = robot_->getRobotState();
+
+    // Algorithm-specific thresholds
+    if (algo == Robot_config::DWA || algo == Robot_config::DWA_DDP) {
+        return 2 * robot_->max_vel_x + 1;
+    }
+    if (algo == Robot_config::MPPI || algo == Robot_config::MPPI_DDP) {
+        return 1.5 * robot_->max_vel_x;
+    }
+
+    // State-specific thresholds for DDP
+    switch (state) {
+        case Robot_config::NORMAL_PLANNING:
+            return 2 * robot_->max_vel_x + 2;
+        case Robot_config::LOW_SPEED_PLANNING:
+            return 1 * robot_->max_vel_x + 1;
+        case Robot_config::NO_MAP_PLANNING:
+            return robot_->max_vel_x;
+        default:
+            return 0.8;
+    }
+}
+
+//==============================================================================
+// HELPER: Handle empty global path (fallback strategies)
+//==============================================================================
+bool JackalCallbacks::handleEmptyGlobalPath() {
+    // Strategy 1: Use historical goals if available
+    if (robot_->local_goals_history.size() >= 2) {
+        std::vector<double> lg = transform_lg(
+            robot_->local_goals_history[0][0], robot_->local_goals_history[0][1],
+            robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
+
+        robot_->setLocalGoal(lg, robot_->local_goals_history[0][0], robot_->local_goals_history[0][1]);
+
+        robot_->local_paths_history.erase(robot_->local_paths_history.begin());
+        robot_->local_goals_history.erase(robot_->local_goals_history.begin());
+
+        robot_->view_Goal(robot_->global_goal_odom, robot_->local_goal_odom);
+        return true;
+    }
+
+    // Strategy 2: Use historical path to replan
+    if (!robot_->local_paths_history.empty()) {
+        // Find closest point on historical path
+        std::vector<double> X, Y;
+        int close_id = -1;
+        double min_distance = INFINITY;
+
+        for (size_t i = 0; i < robot_->local_paths_history[0].size(); ++i) {
+            std::vector<double> lg = transform_lg(
+                robot_->local_paths_history[0][i][0], robot_->local_paths_history[0][i][1],
+                robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
+
+            double distance = std::sqrt(lg[0] * lg[0] + lg[1] * lg[1]);
+            if (distance < min_distance) {
+                min_distance = distance;
+                close_id = static_cast<int>(i);
+            }
+            X.push_back(lg[0]);
+            Y.push_back(lg[1]);
+        }
+
+        // Rebuild path from closest point
+        std::vector<std::vector<double>> paths = {{robot_->robot_state.x_, robot_->robot_state.y_}};
+        std::vector<double> path_x, path_y;
+        for (size_t i = close_id; i < X.size(); ++i) {
+            paths.push_back({robot_->local_paths_history[0][i][0], robot_->local_paths_history[0][i][1]});
+            path_x.push_back(robot_->local_paths_history[0][i][0]);
+            path_y.push_back(robot_->local_paths_history[0][i][1]);
+        }
+        robot_->local_paths_odom = paths;
+
+        // Publish historical path (used as fallback)
+        robot_->publishSmoothedPath(path_x, path_y);
+
+        // Find local goal along path
+        double length = l2_distance(X[close_id], Y[close_id], 0, 0);
+        double threshold = std::max(1.0 - 0.08 * robot_->re, 0.2);
+        bool found = false;
+
+        for (size_t i = close_id; i < X.size(); ++i) {
+            if (i > 0) {
+                length += l2_distance(X[i], Y[i], X[i - 1], Y[i - 1]);
+            }
+
+            if (length >= threshold) {
+                if (i < robot_->local_paths_history[0].size()) {
+                    std::vector<double> lg = {X[i], Y[i]};
+                    robot_->setLocalGoal(lg, robot_->local_paths_history[0][i][0], robot_->local_paths_history[0][i][1]);
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        // Fallback to global goal
+        if (!found) {
+            std::vector<double> lg = transform_lg(
+                robot_->global_goal_odom[0], robot_->global_goal_odom[1],
+                robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
+            robot_->setLocalGoal(lg, robot_->global_goal_odom[0], robot_->global_goal_odom[1]);
+        }
+
+        robot_->view_Goal(robot_->global_goal_odom, robot_->local_goal_odom);
+        robot_->update_angular_velocity();
+        return true;
+    }
+
+    return false;
+}
+
+//==============================================================================
+// HELPER: Process valid global path
+//==============================================================================
+void JackalCallbacks::processValidGlobalPath(const nav_msgs::Path::ConstPtr& msg) {
+    // Extract path waypoints
+    std::vector<double> X, Y;
+    for (const auto& pose : msg->poses) {
+        X.push_back(pose.pose.position.x);
+        Y.push_back(pose.pose.position.y);
+    }
+
+    // Apply Savitzky-Golay filter to smooth the path
+    std::vector<double> xhat = savgolFilter(X, 9, 2);
+    std::vector<double> yhat = savgolFilter(Y, 9, 2);
+
+    // Publish smoothed global path
+    robot_->publishSmoothedPath(xhat, yhat);
+
+    // Transform global goal to robot frame
+    std::vector<double> lg = transform_lg(
+        robot_->global_goal_odom[0], robot_->global_goal_odom[1],
+        robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
+
+    robot_->global_goal = lg;
+
+    // Find local goal along the smoothed path
+    double threshold = computeLookaheadThreshold();
+    double length = 0;
+    bool found = false;
+
+    for (size_t i = 1; i < xhat.size(); ++i) {
+        length += l2_distance(xhat[i], yhat[i], xhat[i - 1], yhat[i - 1]);
+
+        if (length >= threshold) {
+            lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
+            robot_->setLocalGoal(lg, xhat[i], yhat[i]);
+            found = true;
+            break;
+        }
+    }
+
+    // Fallback to global goal if path too short
+    if (!found) {
+        lg = transform_lg(robot_->global_goal_odom[0], robot_->global_goal_odom[1],
+                         robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
+        robot_->setLocalGoal(lg, robot_->global_goal_odom[0], robot_->global_goal_odom[1]);
+    }
+
+    // Downsample path for local planning (0.1m spacing)
+    std::vector<double> last_point = {INFINITY, INFINITY};
+    for (size_t i = 1; i < xhat.size(); ++i) {
+        if (std::isfinite(last_point[0])) {
+            double dx = xhat[i] - last_point[0];
+            double dy = yhat[i] - last_point[1];
+            double distance = std::sqrt(dx * dx + dy * dy);
+
+            if (distance >= 0.1) {
+                lg = transform_lg(xhat[i], yhat[i], robot_->robot_state.x_, robot_->robot_state.y_, robot_->robot_state.theta_);
+                robot_->local_paths.emplace_back(std::vector<double>{lg[0], lg[1]});
+                robot_->local_paths_odom.emplace_back(std::vector<double>{xhat[i], yhat[i]});
+                last_point = {xhat[i], yhat[i]};
+            }
+        } else {
+            last_point = {xhat[i], yhat[i]};
+        }
+    }
+
+    // Update history (keep last 30 paths/goals)
+    if (!robot_->local_paths.empty() && !robot_->local_goal_odom.empty()) {
+        robot_->local_paths_history.push_back(robot_->local_paths_odom);
+        robot_->local_goals_history.push_back(robot_->local_goal_odom);
+
+        if (robot_->local_paths_history.size() > 30) {
+            robot_->local_paths_history.erase(robot_->local_paths_history.begin());
+        }
+        if (robot_->local_goals_history.size() > 30) {
+            robot_->local_goals_history.erase(robot_->local_goals_history.begin());
+        }
+    }
+
+    // Visualize and update angular velocity
+    robot_->view_Goal(robot_->global_goal_odom, robot_->local_goal_odom);
+    robot_->update_angular_velocity();
+}

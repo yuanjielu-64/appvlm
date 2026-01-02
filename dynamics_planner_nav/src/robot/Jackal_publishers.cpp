@@ -1,5 +1,9 @@
 #include "Jackal_publishers.hpp"
 #include "Utility.hpp"
+#include <std_msgs/Float64MultiArray.h>
+#include <std_msgs/String.h>
+#include <sstream>
+#include <iomanip>
 
 void RobotVisualizer::publishGoals(const ros::Publisher &global_goal_pub,
                                    const ros::Publisher &local_goal_pub,
@@ -106,6 +110,27 @@ void RobotVisualizer::publishTrajectory(const ros::Publisher &traj_pub,
     traj_pub.publish(path);
 }
 
+void RobotVisualizer::publishSmoothedGlobalPath(const ros::Publisher &smoothed_path_pub,
+                                                const std::vector<double> &xhat,
+                                                const std::vector<double> &yhat) {
+    nav_msgs::Path smoothed_path;
+    smoothed_path.header.stamp = ros::Time::now();
+    smoothed_path.header.frame_id = "odom";
+
+    for (size_t i = 0; i < xhat.size() && i < yhat.size(); ++i) {
+        geometry_msgs::PoseStamped pose;
+        pose.header.stamp = ros::Time::now();
+        pose.header.frame_id = "odom";
+        pose.pose.position.x = xhat[i];
+        pose.pose.position.y = yhat[i];
+        pose.pose.position.z = 0.0;
+        pose.pose.orientation.w = 1.0;
+        smoothed_path.poses.push_back(pose);
+    }
+
+    smoothed_path_pub.publish(smoothed_path);
+}
+
 void Robot_config::publishRobotState() const {
     std_msgs::String state_msg;
 
@@ -127,6 +152,8 @@ void Robot_config::publishRobotState() const {
     robot_state_pub.publish(state_msg);
 }
 
+// (deprecated variant removed; JSON variant kept below)
+
 void Robot_config::view_Goal(std::vector<double> &goal, std::vector<double> &goal1) const {
     RobotVisualizer::publishGoals(global_goal_pub, local_goal_pub, goal, goal1);
 }
@@ -138,5 +165,66 @@ void Robot_config::viewTrajectories(std::vector<PoseState> &trajectories, int nr
 
 void Robot_config::viewTrajectories(std::vector<PoseState> &trajectories, int nr_steps_, std::vector<double> &t) const {
     RobotVisualizer::publishTrajectory(trajectory_pub, trajectories, nr_steps_, t);
+}
+
+void Robot_config::publishSmoothedPath(const std::vector<double> &xhat, const std::vector<double> &yhat) const {
+    RobotVisualizer::publishSmoothedGlobalPath(smoothed_global_path_pub, xhat, yhat);
+}
+
+
+// Publish current tuning parameters as JSON (named fields, planner-specific)
+void Robot_config::publishTuningParams() const {
+    const auto tp = getTuningParams();
+    std_msgs::String out;
+
+    std::ostringstream oss;
+    oss.setf(std::ios::fixed); oss << std::setprecision(6);
+
+    auto add_kv = [&](const char* key, double value, bool &first){
+        if (!first) oss << ", ";
+        first = false;
+        oss << '"' << key << '"' << ':' << value;
+    };
+
+    bool first = true;
+    oss << '{';
+
+    // Always useful
+    add_kv("max_vel_x", tp.max_vel_x, first);
+    add_kv("max_vel_theta", tp.max_vel_theta, first);
+    add_kv("dt", tp.dt, first);
+
+    switch (getAlgorithm()) {
+        case DWA: {
+            add_kv("vx_samples", tp.vx_sample, first);
+            add_kv("vtheta_samples", tp.vTheta_samples, first);
+            add_kv("path_distance_bias", tp.path_distance_bias, first);
+            add_kv("goal_distance_bias", tp.goal_distance_bias, first);
+            break;
+        }
+        case MPPI:
+        case MPPI_DDP: {
+            add_kv("nr_pairs", tp.nr_pairs_, first);
+            add_kv("nr_steps", tp.nr_steps_, first);
+            add_kv("linear_stddev", tp.linear_stddev, first);
+            add_kv("angular_stddev", tp.angular_stddev, first);
+            add_kv("lambda", tp.lambda, first);
+            break;
+        }
+        case DDP: {
+            add_kv("nr_pairs", tp.nr_pairs_, first);
+            add_kv("distance", tp.distance, first);
+            add_kv("robot_radius", tp.robot_radius_, first);
+            break;
+        }
+        default: break;
+    }
+
+    // Optional diagnostics
+    add_kv("local_goal_distance", tp.local_goal_distance, first);
+
+    oss << '}';
+    out.data = oss.str();
+    tuning_params_pub.publish(out);
 }
 

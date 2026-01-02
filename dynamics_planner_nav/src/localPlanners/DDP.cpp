@@ -1,32 +1,28 @@
 #include "localPlanners/DDP.hpp"
 #include "utils/Algebra.hpp"
+#include "utils/Timer.hpp"
 #include <iomanip>
-#include <chrono>
 
 namespace Antipatrea {
 
-    namespace Timer {
-        using Clock = std::chrono::high_resolution_clock::time_point;
-        inline void Start(Clock& clock) { clock = std::chrono::high_resolution_clock::now(); }
-        inline double Elapsed(const Clock& start) {
-            return std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count();
-        }
-    }
-    bool DDP::Solve(const int nrIters, double dt, bool &canBeSolved) {
-        geometry_msgs::Twist cmd_vel;
-
-        if (!robot) return false;
-
+    void DDP::updateRobotState() {
         current_vel = robot->getPoseState().velocity_;
         parent = {0, 0, 0, robot->getPoseState().velocity_, robot->getPoseState().angular_velocity_, true};
         parent_odom = robot->getPoseState();
         timeInterval = robot->timeInterval;
+    }
+
+    bool DDP::Solve(int nrIters, double dt, bool &canBeSolved) {
+        geometry_msgs::Twist cmd_vel;
+
+        if (!robot) return false;
+
+        updateRobotState();
 
         std::pair<std::vector<PoseState>, bool> best_traj;
         best_traj.first.reserve(nr_steps_);
 
         commonParameters(*robot);
-
         switch (robot->getRobotState()) {
             case Robot_config::NO_MAP_PLANNING:
                 return handleNoMapPlanning(cmd_vel);
@@ -60,12 +56,11 @@ namespace Antipatrea {
 
         normalParameters(*robot);
 
-        auto result = mppi_planning(parent, parent_odom, best_traj, dt);
+        auto result = ddp_planning(parent, parent_odom, best_traj, dt);
 
         robot->viewTrajectories(best_traj.first, nr_steps_, 0.0, timeInterval);
 
         if (result == false) {
-            // robot->setRobotState(Robot_config::LOW_SPEED_PLANNING);
             publishCommand(cmd_vel, best_traj.first[3].velocity_ / 2, best_traj.first[3].angular_velocity_ / 2);
         } else
             publishCommand(cmd_vel, best_traj.first[3].velocity_, best_traj.first[3].angular_velocity_);
@@ -79,7 +74,7 @@ namespace Antipatrea {
 
         lowSpeedParameters(*robot);
 
-        auto result = mppi_planning(parent, parent_odom, best_traj, dt);
+        auto result = ddp_planning(parent, parent_odom, best_traj, dt);
 
         robot->viewTrajectories(best_traj.first, nr_steps_, 0.0, timeInterval);
         if (!result) {
@@ -117,7 +112,7 @@ namespace Antipatrea {
             recoverParameters(*robot);
             bool result = false;
 
-            result = mppi_planning(parent, parent_odom, best_traj, dt);
+            result = ddp_planning(parent, parent_odom, best_traj, dt);
             robot->viewTrajectories(best_traj.first, nr_steps_, 0.0, timeInterval);
 
             if (result) {
@@ -187,12 +182,10 @@ namespace Antipatrea {
         robot->Control().publish(cmd_vel);
     }
 
-    bool DDP::mppi_planning(PoseState &state, PoseState &state_odom,
+    bool DDP::ddp_planning(PoseState &state, PoseState &state_odom,
                             std::pair<std::vector<PoseState>, bool> &best_traj, double dt) {
         Timer::Clock d_t;
         Timer::Start(d_t);
-
-        timeInterval = robot->timeInterval;
 
         best_traj.first.reserve(nr_steps_);
 
@@ -564,28 +557,6 @@ namespace Antipatrea {
         return trajectory;
     }
 
-    double DDP::updateVelocity(double current, double target, double maxAccel, double minAccel, double t) {
-        if (current < target) {
-            return std::min(current + maxAccel * t, target);
-        } else {
-            return std::max(current + minAccel * t, target);
-        }
-    }
-
-    void DDP::motion(PoseState &state, const double velocity, const double angular_velocity, double t) {
-        double v = updateVelocity(state.velocity_, velocity, maxAccelerSpeed, minAccelerSpeed, t);
-        double w = updateVelocity(state.angular_velocity_, angular_velocity, maxAngularAccelerSpeed,
-                                  minAngularAccelerSpeed, t);
-
-        state.theta_ += w * t;
-        state.x_ += v * cos(state.theta_) * t;
-        state.y_ += v * sin(state.theta_) * t;
-        state.velocity_ = v;
-        state.angular_velocity_ = w;
-
-        state.theta_ = normalizeAngle(state.theta_);
-    }
-
     void DDP::normalize_costs(std::vector<DDP::Cost> &costs) {
         Cost min_cost(1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6, 1e6), max_cost;
 
@@ -678,15 +649,71 @@ namespace Antipatrea {
         return normalizeAngle(theta - normalizedTheta);
     }
 
-    double DDP::normalizeAngle(double a) {
-        a = fmod(a + M_PI, 2 * M_PI);
-        if (a <= 0)
-            a += 2 * M_PI;
-
-        return a - M_PI;
+    double DDP::normalizeAngle(double angle) {
+        angle = fmod(angle + M_PI, 2 * M_PI);
+        if (angle <= 0)
+            angle += 2 * M_PI;
+        return angle - M_PI;
     }
 
-    double DDP::calc_path_cost(const std::vector<PoseState> &traj) {
+    double DDP::updateVelocity(double current, double target, double maxAccel, double minAccel, double t) {
+        if (current < target) {
+            return std::min(current + maxAccel * t, target);
+        } else {
+            return std::max(current + minAccel * t, target);
+        }
+    }
+
+    void DDP::motion(PoseState &state, const double velocity, const double angular_velocity, double t) const {
+        double v = updateVelocity(state.velocity_, velocity, maxAccelerSpeed, minAccelerSpeed, t);
+        double w = updateVelocity(state.angular_velocity_, angular_velocity, maxAngularAccelerSpeed,
+                                  minAngularAccelerSpeed, t);
+
+        state.theta_ += w * t;
+        state.x_ += v * cos(state.theta_) * t;
+        state.y_ += v * sin(state.theta_) * t;
+        state.velocity_ = v;
+        state.angular_velocity_ = w;
+
+        state.theta_ = normalizeAngle(state.theta_);
+    }
+
+    double DDP::calc_speed_cost(const std::vector<PoseState> &traj) const {
+        if (!use_speed_cost_)
+            return 0.0;
+        return std::abs(current_vel - traj[3].velocity_);
+    }
+
+    double DDP::calc_angular_velocity(const std::vector<PoseState> &traj) const {
+        if (use_angular_cost_) {
+            double angular_velocity = std::abs(traj.front().angular_velocity_);
+            double angular_velocity_cost = angular_velocity * angular_velocity;
+            return angular_velocity_cost;
+        }
+        return 0.0;
+    }
+
+    double DDP::calc_to_goal_cost(const std::vector<PoseState> &traj) {
+        if (use_goal_cost_ == false)
+            return 0.0;
+        double d = 0;
+        for (int i = int(3 * traj.size() / 4); i < (int)traj.size() - 1; i++) {
+            d += Algebra::PointDistance(2, &traj[i].pose()[0], &local_goal[0]);
+        }
+        return d / int(1 * traj.size() / 4);
+    }
+
+    double DDP::calc_ori_cost(const std::vector<PoseState> &traj) {
+        if (!use_ori_cost_)
+            return 0.0;
+        double theta = 0;
+        for (int i = int(3 * traj.size() / 4); i < (int)traj.size() - 1; i++) {
+            theta += fabs(calculateTheta(traj[i], &local_goal[0]));
+        }
+        return theta / int(1 * traj.size() / 4);
+    }
+
+    double DDP::calc_path_cost(const std::vector<PoseState> &traj) const {
         double d = 0;
         for (int i = 0; i < traj.size() - 2; i++)
             d += Algebra::PointDistance(2, &traj[i].pose()[0], &traj[i + 1].pose()[0]);
@@ -721,40 +748,6 @@ namespace Antipatrea {
         return d / (double) traj.size();
     }
 
-    double DDP::calc_ori_cost(const std::vector<PoseState> &traj) {
-        if (!use_ori_cost_)
-            return 0.0;
-
-        double theta = 0;
-
-        for (int i = int(3 * traj.size() / 4); i < traj.size() - 1; i++) {
-            theta += fabs(calculateTheta(traj[i], &local_goal[0]));
-        }
-
-        return theta / int(1 * traj.size() / 4);;
-    }
-
-    double DDP::calc_angular_velocity(const std::vector<PoseState> &traj) {
-        if (use_angular_cost_) {
-            double angular_velocity = std::abs(traj.front().angular_velocity_);
-            double angular_velocity_cost = angular_velocity * angular_velocity;
-            return angular_velocity_cost;
-        }
-
-        return 0.0;
-    }
-
-    double DDP::calc_to_goal_cost(const std::vector<PoseState> &traj) {
-        if (use_goal_cost_ == false)
-            return 0.0;
-
-        double d = 0;
-        for (int i = int(3 * traj.size() / 4); i < traj.size() - 1; i++) {
-            d += Algebra::PointDistance(2, &traj[i].pose()[0], &local_goal[0]);
-        }
-
-        return d / int(1 * traj.size() / 4);
-    }
 
     double DDP::pointToSegmentDistance(const PoseState &p1, const PoseState &p2, const std::vector<double> &o) {
         double dx = p2.x_ - p1.x_;
@@ -933,12 +926,6 @@ namespace Antipatrea {
         return std::sqrt(dx * dx + dy * dy);
     }
 
-    double DDP::calc_speed_cost(const std::vector<PoseState> &traj) {
-        if (!use_speed_cost_)
-            return 0.0;
-
-        return abs(current_vel - traj[3].velocity_);
-    }
 
     DDP::RobotBox::RobotBox() : x_max(0.0), x_min(0.0), y_max(0.0), y_min(0.0) {
     }
@@ -1019,7 +1006,7 @@ namespace Antipatrea {
                             max_angular_velocity_(0.0) {
     }
 
-    DDP::Window DDP::calc_dynamic_window(PoseState &state, double dt) {
+    DDP::Window DDP::calc_dynamic_window(PoseState &state, double dt) const {
         Window window;
         auto footprint = robot->getFootprint();
         auto velocity = robot->getVelocityLimits();

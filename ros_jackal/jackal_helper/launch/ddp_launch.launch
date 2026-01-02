@@ -47,10 +47,10 @@
 
   <node pkg="jackal_helper" type="collision_publisher_node" name="collision_publisher_node" />
 
-  <node pkg="barn_challenge_lu" type="Runner" name="Runner" output="screen"
-    args="$(arg ddp_param1) $(find barn_challenge_lu)/data/ParamsForJackalGlobal.txt UseMP $(arg ddp_param2)"/>
+  <node pkg="dynamics_planner_nav" type="Runner" name="Runner" output="screen"
+    args="$(arg ddp_param1) $(find dynamics_planner_nav)/data/ParamsForJackalGlobal.txt UseMP $(arg ddp_param2)"/>
 
-  <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find barn_challenge_lu)/rviz/a.rviz" /> -->
+  <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dynamics_planner_nav)/rviz/a.rviz" /> -->
 
   <!--- Run GMapping for SLAM -->
   <arg name="scan_topic" default="$(eval optenv('JACKAL_LASER_TOPIC', 'front/scan'))" />

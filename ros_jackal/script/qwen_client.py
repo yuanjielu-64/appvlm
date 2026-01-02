@@ -12,13 +12,12 @@ import subprocess
 import os
 
 class QwenClient:
-    """Qwen推理服务客户端"""
 
     def __init__(
         self,
         qwen_url: str = "http://localhost:5000",
         algorithm: str = "DWA",
-        timeout: float = 120.0,  # 增加到120秒，匹配smoke_test
+        timeout: float = 120.0,
         auto_start: bool = False,
         qwen_script_path: Optional[str] = None,
     ):
@@ -41,12 +40,11 @@ class QwenClient:
             self.start_qwen_service(qwen_script_path)
 
     def start_qwen_service(self, qwen_script_path: str, **kwargs):
-        """启动Qwen推理服务"""
+
         conda_python = '/home/yuanjielu/miniforge3/envs/lmms-finetune-qwen/bin/python'
 
         cmd = [conda_python, qwen_script_path]
 
-        # 添加可选参数
         if 'base_model' in kwargs:
             cmd.extend(['--base_model', kwargs['base_model']])
         if 'lora_path' in kwargs:
@@ -59,11 +57,10 @@ class QwenClient:
         print(f"Starting Qwen service: {' '.join(cmd)}")
         self.qwen_process = subprocess.Popen(cmd)
 
-        # 等待服务启动
         self.wait_for_service(timeout=60)
 
     def wait_for_service(self, timeout: float = 120):
-        """等待Qwen服务启动"""
+
         print(f"Waiting for Qwen service at {self.qwen_url}...")
         start = time.time()
 

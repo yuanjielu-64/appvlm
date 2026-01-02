@@ -16,28 +16,13 @@ add_executable(jackal_node
   src/jackal_hardware.cpp
   src/jackal_diagnostic_updater.cpp)
 target_link_libraries(jackal_node ${catkin_LIBRARIES} ${Boost_LIBRARIES})
-# Depend on generated messages if the targets exist (handle old/new catkin names)
-if(TARGET jackal_msgs_generate_messages_cpp)
-  add_dependencies(jackal_node jackal_msgs_generate_messages_cpp)
-elseif(TARGET jackal_msgs_gencpp)
-  add_dependencies(jackal_node jackal_msgs_gencpp)
-endif()
-
-if(TARGET rosserial_msgs_generate_messages_cpp)
-  add_dependencies(jackal_node rosserial_msgs_generate_messages_cpp)
-elseif(TARGET rosserial_msgs_gencpp)
-  add_dependencies(jackal_node rosserial_msgs_gencpp)
-endif()
+add_dependencies(jackal_node jackal_msgs_gencpp rosserial_msgs_gencpp)
 
 add_executable(${PROJECT_NAME}_simple_joy_node src/simple_joy_node.cpp)
 target_link_libraries(${PROJECT_NAME}_simple_joy_node ${catkin_LIBRARIES})
 set_target_properties(${PROJECT_NAME}_simple_joy_node
   PROPERTIES OUTPUT_NAME simple_joy_node PREFIX "")
-if(TARGET jackal_msgs_generate_messages_cpp)
-  add_dependencies(${PROJECT_NAME}_simple_joy_node jackal_msgs_generate_messages_cpp)
-elseif(TARGET jackal_msgs_gencpp)
-  add_dependencies(${PROJECT_NAME}_simple_joy_node jackal_msgs_gencpp)
-endif()
+add_dependencies(${PROJECT_NAME}_simple_joy_node jackal_msgs_gencpp)
 
 install(TARGETS jackal_node ${PROJECT_NAME}_simple_joy_node
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
