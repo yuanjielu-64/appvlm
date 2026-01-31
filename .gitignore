@@ -74,9 +74,13 @@ ros_jackal/model/*/
 # ROS Jackal - Model and Buffer directories
 ros_jackal/model/
 ros_jackal/buffer/
+ros_jackal/data/
 
 # Imitation Learning - Output directory
 Imitation_learning/output/
+
+# Qwen DPT - Scripts directory
+qwen_dpt/scripts/
 
 # Runtime logs
 logs/runtime/
