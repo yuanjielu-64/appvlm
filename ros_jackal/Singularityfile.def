@@ -64,7 +64,7 @@ From: ros:noetic
     # Set up ROS workspace
     cd /jackal_ws
     source /opt/ros/noetic/setup.bash
-    catkin_make
+    catkin_make || { echo "❌ catkin_make failed!"; exit 1; }
 
 %environment
     export ROS_WORKSPACE=/jackal_ws

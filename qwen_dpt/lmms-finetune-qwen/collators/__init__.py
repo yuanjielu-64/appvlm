@@ -1,0 +1,23 @@
+COLLATORS = {}
+
+def register_collator(name):
+    def register_collator_cls(cls):
+        if name in COLLATORS:
+            return COLLATORS[name]
+        COLLATORS[name] = cls
+        return cls
+    return register_collator_cls
+
+
+from .llava_1_5 import LLaVA1_5_DataCollator
+from .llava_1_6 import LLaVA1_6_DataCollator
+from .llava_interleave import LLaVAInterleaveDataCollator
+from .llava_next_video import LLaVANeXTVideoDataCollator
+from .llava_onevision import LLaVAOnevisionDataCollator
+from .qwen_vl import QwenVLDataCollator
+from .phi3_v import Phi3VDataCollator
+from .qwen2_vl import Qwen2VLDataCollator
+from .qwen2_5_vl import Qwen2_5_VLDataCollator
+from .qwen2_5_vl_regression import Qwen2_5_VLRegressionDataCollator
+from .llama_3_2_vision import LLaMA3_2_VisionDataCollator
+from .internvl2 import InternVL2DataCollator

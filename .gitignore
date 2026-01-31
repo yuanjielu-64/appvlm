@@ -71,6 +71,13 @@ install/
 models/checkpoints/
 ros_jackal/model/*/
 
+# ROS Jackal - Model and Buffer directories
+ros_jackal/model/
+ros_jackal/buffer/
+
+# Imitation Learning - Output directory
+Imitation_learning/output/
+
 # Runtime logs
 logs/runtime/
 temp_logs/

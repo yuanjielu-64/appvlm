@@ -14,6 +14,11 @@ from enum import Enum
 from scipy.signal import savgol_filter
 
 try:
+    from PIL import Image as PILImage
+except ImportError:
+    PILImage = None
+
+try:
     import rospy
     from std_msgs.msg import Bool, Float64, Float64MultiArray
     from sensor_msgs.msg import LaserScan
@@ -44,11 +49,13 @@ PLANNER_PARAMS = {
             "regularization", "inflation"]
 }
 
+
 class RobotMode(Enum):
     BASELINE_RL_HB = "rl_hb"
     BASELINE_CHATGPT = "chatgpt"
     NORMAL = "normal"
     RECOVERY = "recovery_behavior"
+
 
 @dataclass
 class Cfg:
@@ -62,10 +69,10 @@ class Cfg:
 
     # sectors & thresholds
     front_half_deg: int = 30
-    side_min_deg:  int = 30
-    side_max_deg:  int = 135
-    front_th: tuple = (0.25, 0.50, 0.75)   # very_unsafe, unsafe, medium
-    side_th:  tuple = (0.20, 0.40, 0.60)
+    side_min_deg: int = 30
+    side_max_deg: int = 135
+    front_th: tuple = (0.25, 0.50, 0.75)  # very_unsafe, unsafe, medium
+    side_th: tuple = (0.20, 0.40, 0.60)
 
     # velocity mapping
     v_min: float = 0.5
@@ -75,10 +82,10 @@ class Cfg:
     sig_d_max: float = 1.75
     omega_eps: float = 0.5
 
-    crop_left_m: float   = 2.0
-    crop_top_m: float    = 2.0
+    crop_left_m: float = 2.0
+    crop_top_m: float = 2.0
     crop_bottom_m: float = 2.0
-    crop_right_m: float  = 0.0
+    crop_right_m: float = 0.0
 
     omega_max: float = 2.0
     curvature_sample_dist: float = 0.3
@@ -94,14 +101,20 @@ class Cfg:
     backtrack_alpha: float = 0.6
     vel_near_zero: float = 0.03
 
+
 @dataclass
 class RobotState:
-    x: float = 0.0; y: float = 0.0; z: float = 0.0
-    theta: float = 0.0; v: float = 0.0; w: float = 0.0
+    x: float = 0.0;
+    y: float = 0.0;
+    z: float = 0.0
+    theta: float = 0.0;
+    v: float = 0.0;
+    w: float = 0.0
     mode: RobotMode = RobotMode.NORMAL
 
     def get_robot_state(self):
         return np.array([self.x, self.y, self.theta, self.v, self.w])
+
 
 # ================== 3) 安全评估组件 ==================
 class SafetyAssessor:
@@ -109,7 +122,7 @@ class SafetyAssessor:
     def __init__(self, cfg: Cfg):
         self.cfg = cfg
         self._scan_cache = None
-        self.d = {"front": 2,"left": 2,  "right": 2}
+        self.d = {"front": 2, "left": 2, "right": 2}
 
     def _ensure_scan_cache(self, scan: LaserScan):
         if self._scan_cache is not None:
@@ -119,8 +132,8 @@ class SafetyAssessor:
         ang_deg = np.degrees(angles)
         c = self.cfg
         m_front = (ang_deg >= -c.front_half_deg) & (ang_deg <= c.front_half_deg)
-        m_left  = (ang_deg >=  c.side_min_deg)   & (ang_deg <= c.side_max_deg)
-        m_right = (ang_deg <= -c.side_min_deg)   & (ang_deg >= -c.side_max_deg)
+        m_left = (ang_deg >= c.side_min_deg) & (ang_deg <= c.side_max_deg)
+        m_right = (ang_deg <= -c.side_min_deg) & (ang_deg >= -c.side_max_deg)
         self._scan_cache = dict(angles=angles, m_front=m_front, m_left=m_left, m_right=m_right)
 
     def _rect_edge_radius(self, ang_rad: np.ndarray) -> np.ndarray:
@@ -130,10 +143,14 @@ class SafetyAssessor:
         ca, sa = np.cos(ang_rad), np.sin(ang_rad)
         INF = np.inf
         with np.errstate(divide='ignore', invalid='ignore'):
-            txp = np.where(ca > 1e-9, a/ca, INF); txp = np.where(np.abs(txp*sa) <= b, txp, INF)
-            txn = np.where(ca < -1e-9, -a/ca, INF); txn = np.where(np.abs(txn*sa) <= b, txn, INF)
-            typ = np.where(sa > 1e-9, b/sa, INF);  typ = np.where(np.abs(typ*ca) <= a, typ, INF)
-            tyn = np.where(sa < -1e-9, -b/sa, INF); tyn = np.where(np.abs(tyn*ca) <= a, tyn, INF)
+            txp = np.where(ca > 1e-9, a / ca, INF);
+            txp = np.where(np.abs(txp * sa) <= b, txp, INF)
+            txn = np.where(ca < -1e-9, -a / ca, INF);
+            txn = np.where(np.abs(txn * sa) <= b, txn, INF)
+            typ = np.where(sa > 1e-9, b / sa, INF);
+            typ = np.where(np.abs(typ * ca) <= a, typ, INF)
+            tyn = np.where(sa < -1e-9, -b / sa, INF);
+            tyn = np.where(np.abs(tyn * ca) <= a, tyn, INF)
         return np.minimum.reduce([txp, txn, typ, tyn])
 
     def _sector_min_masked(self, ranges, angles, mask) -> float:
@@ -142,7 +159,8 @@ class SafetyAssessor:
         angs = angles[mask]
         valid = np.isfinite(vals)
         if not np.any(valid): return float('inf')
-        vals = vals[valid]; angs = angs[valid]
+        vals = vals[valid];
+        angs = angs[valid]
         t_robot = self._rect_edge_radius(angs)
         clr = np.maximum(vals - t_robot, 0.0)
         return float(clr.min()) if clr.size else float('inf')
@@ -153,21 +171,24 @@ class SafetyAssessor:
         r = np.asarray(scan.ranges, dtype=float)
         return {
             "front": self._sector_min_masked(r, c["angles"], c["m_front"]),
-            "left":  self._sector_min_masked(r, c["angles"], c["m_left"]),
+            "left": self._sector_min_masked(r, c["angles"], c["m_left"]),
             "right": self._sector_min_masked(r, c["angles"], c["m_right"]),
         }
 
     def _weighted_clearance(self, d, omega):
         eps = self.cfg.omega_eps
-        if omega >  eps: weights = {"front":1.0,"left":1.5,"right":0.75}
-        elif omega < -eps: weights = {"front":1.0,"left":0.75,"right":1.5}
-        else: weights = {"front":1.0,"left":0.5,"right":0.5}
-        return min(d[s]/weights[s] for s in ("front","left","right"))
+        if omega > eps:
+            weights = {"front": 1.0, "left": 1.5, "right": 0.75}
+        elif omega < -eps:
+            weights = {"front": 1.0, "left": 0.75, "right": 1.5}
+        else:
+            weights = {"front": 1.0, "left": 0.5, "right": 0.5}
+        return min(d[s] / weights[s] for s in ("front", "left", "right"))
 
     def _dist_to_velocity(self, dist: float) -> float:
         c = self.cfg
         if dist >= c.sig_d_max: return c.v_max
-        v = c.v_min + (c.v_max - c.v_min)/(1.0 + np.exp(-c.sig_k*(dist - c.sig_d_mid)))
+        v = c.v_min + (c.v_max - c.v_min) / (1.0 + np.exp(-c.sig_k * (dist - c.sig_d_mid)))
         return float(np.clip(v, c.v_min, c.v_max))
 
     def assess(self, scan: LaserScan, state: RobotState) -> float:
@@ -207,72 +228,80 @@ class SafetyAssessor:
     def reset(self):
         self._scan_cache = None
 
+
 # ================== 4) 画图/存图组件 ==================
 class FrameDrawer:
     def __init__(self, cfg: Cfg):
         self.cfg = cfg
         self.frame_id = 0
+        self.img_name = None  # 初始化为None，首次generate_img()时会设置
         self.img = None
+        self.img_PIL = None  # PIL Image格式，用于pickle保存
 
     def _draw_robot(self, img, cx, cy, yaw):
         c = self.cfg
         w_px = int(c.robot_w / c.target_res)
         l_px = int(c.robot_l / c.target_res)
-        half_w, half_l = w_px/2, l_px/2
-        corners = np.array([[-half_l,-half_w],[half_l,-half_w],[half_l,half_w],[-half_l,half_w]], dtype=np.float32)
-        yaw_adj = yaw + math.pi/2
-        R = np.array([[math.cos(yaw_adj),-math.sin(yaw_adj)],[math.sin(yaw_adj),math.cos(yaw_adj)]])
-        P = (corners @ R.T); P[:,1] = -P[:,1]; P[:,0]+=cx; P[:,1]+=cy
+        half_w, half_l = w_px / 2, l_px / 2
+        corners = np.array([[-half_l, -half_w], [half_l, -half_w], [half_l, half_w], [-half_l, half_w]],
+                           dtype=np.float32)
+        yaw_adj = yaw + math.pi / 2
+        R = np.array([[math.cos(yaw_adj), -math.sin(yaw_adj)], [math.sin(yaw_adj), math.cos(yaw_adj)]])
+        P = (corners @ R.T)
+        P[:, 1] = -P[:, 1]
+        P[:, 0] += cx
+        P[:, 1] += cy
         pts = P.astype(np.int32)
-        cv2.fillPoly(img,[pts],(0,255,255)); cv2.polylines(img,[pts],True,(0,0,0),2)
+        cv2.fillPoly(img, [pts], (0, 255, 255))
+        cv2.polylines(img, [pts], True, (0, 0, 0), 2)
 
     def _draw_path(self, img, robot_center, robot_x, robot_y, robot_yaw, path: Path):
-        if path is None or len(path.poses)==0: return
+        if path is None or len(path.poses) == 0: return
         c = self.cfg
         path_w = max(1, int(c.path_w / c.target_res))
         cos_y, sin_y = math.cos(-robot_yaw), math.sin(-robot_yaw)
-        pts=[]
+        pts = []
         for ps in path.poses:
             rx = ps.pose.position.x - robot_x
             ry = ps.pose.position.y - robot_y
-            bx = rx*cos_y - ry*sin_y
-            by = rx*sin_y + ry*cos_y
+            bx = rx * cos_y - ry * sin_y
+            by = rx * sin_y + ry * cos_y
             ix = int(robot_center + bx / c.target_res)
             iy = int(robot_center - by / c.target_res)
-            pts.append((ix,iy))
-        for i in range(len(pts)-1):
-            cv2.line(img, pts[i], pts[i+1], (0, 0, 0), path_w, lineType=cv2.LINE_AA)
+            pts.append((ix, iy))
+        for i in range(len(pts) - 1):
+            cv2.line(img, pts[i], pts[i + 1], (0, 0, 0), path_w, lineType=cv2.LINE_AA)
 
     def _draw_goals(self, img, robot_center, robot_x, robot_y, robot_yaw, local_goal, global_goal):
         c = self.cfg
         cos_y, sin_y = math.cos(-robot_yaw), math.sin(-robot_yaw)
-        half = int(0.25/2/c.target_res)
+        half = int(0.25 / 2 / c.target_res)
 
         def draw_square(pt, color):
-            x,y = pt
-            cv2.rectangle(img,(x-half,y-half),(x+half,y+half),color,-1)
+            x, y = pt
+            cv2.rectangle(img, (x - half, y - half), (x + half, y + half), color, -1)
 
-        for goal, color in ((local_goal,(0,255,0)), (global_goal,(255,0,0))):
+        for goal, color in ((local_goal, (0, 255, 0)), (global_goal, (255, 0, 0))):
             if goal is None: continue
             gx, gy = goal
-            rx, ry = gx-robot_x, gy-robot_y
-            bx = rx*cos_y - ry*sin_y
-            by = rx*sin_y + ry*cos_y
+            rx, ry = gx - robot_x, gy - robot_y
+            bx = rx * cos_y - ry * sin_y
+            by = rx * sin_y + ry * cos_y
             ix = int(robot_center + bx / c.target_res)
             iy = int(robot_center - by / c.target_res)
             h = img.shape[0]
-            if 0<=ix<h and 0<=iy<h: draw_square((ix,iy), color)
+            if 0 <= ix < h and 0 <= iy < h: draw_square((ix, iy), color)
 
     def _draw_grid(self, img, center):
         c = self.cfg
         step = int(1.0 / c.target_res)
         n = img.shape[0]
-        max_off = n//step + 1
-        for i in range(-max_off, max_off+1):
-            x = center + i*step
-            y = center + i*step
-            if 0 <= x < n: cv2.line(img,(x,0),(x,n-1),(120,120,120),1)
-            if 0 <= y < n: cv2.line(img,(0,y),(n-1,y),(120,120,120),1)
+        max_off = n // step + 1
+        for i in range(-max_off, max_off + 1):
+            x = center + i * step
+            y = center + i * step
+            if 0 <= x < n: cv2.line(img, (x, 0), (x, n - 1), (120, 120, 120), 1)
+            if 0 <= y < n: cv2.line(img, (0, y), (n - 1, y), (120, 120, 120), 1)
 
     def _draw_save_points(self, img, center, robot_x, robot_y, robot_yaw, save_points):
         """
@@ -328,8 +357,8 @@ class FrameDrawer:
 
         c = self.cfg
         n = int(c.crop_size_m / c.target_res)
-        img = np.ones((n,n,3), dtype=np.uint8) * 205
-        center = n//2
+        img = np.ones((n, n, 3), dtype=np.uint8) * 205
+        center = n // 2
 
         # grid + laser
         self._draw_grid(img, center)
@@ -337,10 +366,13 @@ class FrameDrawer:
         ang = scan.angle_min
         for r in scan.ranges:
             if r < scan.range_min or r > scan.range_max or np.isinf(r):
-                ang += scan.angle_increment; continue
-            x = r*math.cos(ang); y = r*math.sin(ang)
-            px = int(center + x/c.target_res); py = int(center - y/c.target_res)
-            if 0<=px<n and 0<=py<n: cv2.circle(img,(px,py),r_px,(0,0,255),-1)
+                ang += scan.angle_increment;
+                continue
+            x = r * math.cos(ang);
+            y = r * math.sin(ang)
+            px = int(center + x / c.target_res);
+            py = int(center - y / c.target_res)
+            if 0 <= px < n and 0 <= py < n: cv2.circle(img, (px, py), r_px, (0, 0, 255), -1)
             ang += scan.angle_increment
 
         # path + goals + robot axes
@@ -350,10 +382,11 @@ class FrameDrawer:
         # if save_points is not None and len(save_points) > 0:
         #     self._draw_save_points(img, center, state.x, state.y, state.theta, save_points)
 
-        axis_len = int(1.0 / c.target_res); axis_w = max(3, int(0.05/c.target_res))
-        cv2.line(img,(center,center),(center+axis_len,center),(0,255,0),axis_w)   # x-axis
-        cv2.line(img,(center,center),(center,center-axis_len),(255,0,0),axis_w)  # y-axis
-        self._draw_robot(img, center, center, -math.pi/2)
+        axis_len = int(1.0 / c.target_res);
+        axis_w = max(3, int(0.05 / c.target_res))
+        cv2.line(img, (center, center), (center + axis_len, center), (0, 255, 0), axis_w)  # x-axis
+        cv2.line(img, (center, center), (center, center - axis_len), (255, 0, 0), axis_w)  # y-axis
+        self._draw_robot(img, center, center, -math.pi / 2)
 
         px = lambda m: int(m / c.target_res)
         L = px(c.crop_left_m)
@@ -375,15 +408,43 @@ class FrameDrawer:
         self.alg = alg
         self.img = copy.deepcopy(img)
 
+        # 同时生成PIL Image格式（用于pickle保存）
+        if PILImage is not None:
+            # OpenCV使用BGR格式，PIL使用RGB格式，需要转换
+            img_rgb = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
+            self.img_PIL = PILImage.fromarray(img_rgb)
+        else:
+            self.img_PIL = None
+
         return True
 
     def generate_img(self):
         if self.img is not None:
             cv2.imwrite(os.path.join(self.img_dir, f"{self.alg}_{self.frame_id:06d}.png"), self.img)
             self.frame_id += 1
+            self.img_name = f"{self.alg}_{self.frame_id:06d}.png"
             return True
 
         return False
+
+    def get_current_img_as_pil(self):
+        """
+        获取当前图像的PIL Image对象（用于保存到pickle）
+
+        Returns:
+            PIL.Image 或 None
+        """
+        if self.img is None:
+            return None
+
+        if PILImage is not None:
+            # OpenCV使用BGR格式，PIL使用RGB格式，需要转换
+            img_rgb = cv2.cvtColor(self.img, cv2.COLOR_BGR2RGB)
+            pil_img = PILImage.fromarray(img_rgb)
+            return pil_img
+        else:
+            print("Warning: PIL not available, cannot convert to PIL Image")
+            return None
 
 
 class GlobalFunc:
@@ -635,7 +696,7 @@ class GlobalFunc:
 
         target = float(np.clip(target, lo, hi))
 
-        max_change_up = 0.03    # 恢复时：每次最多增加 0.03
+        max_change_up = 0.03  # 恢复时：每次最多增加 0.03
         max_change_down = 0.08  # 降低时：每次最多减少 0.08
 
         if target > self._last_cap:
@@ -745,13 +806,13 @@ class GlobalFunc:
         closest_obs_idx_per_corner = distances.argmin(axis=2)  # (N, 8)
         # closest_ob_idx_per_corner[i, j] = 第i个路径点的第j个角点最近的障碍物索引
 
-        min_distance_per_corner = distances.min(axis=2) # shape: (N, 8)
+        min_distance_per_corner = distances.min(axis=2)  # shape: (N, 8)
         # min_distance_per_corner[i, j] = 第i个路径点的第j个角点到最近障碍物的距离
 
         left_idx = np.array([0, 5, 6, 7])
         right_idx = np.array([1, 2, 3, 4])
 
-        d_left  = np.min(min_distance_per_corner[:, left_idx],  axis=1)
+        d_left = np.min(min_distance_per_corner[:, left_idx], axis=1)
         d_right = np.min(min_distance_per_corner[:, right_idx], axis=1)
 
         avg_distance_per_path_point = 0.5 * (d_left + d_right)
@@ -855,8 +916,10 @@ class GlobalFunc:
             cloud_obstacles = pc2.create_cloud_xyz32(header, obstacles_3d)
             self.test_pub2.publish(cloud_obstacles)
 
+
 class JackalRos:
-    def __init__(self, init_position, goal_position, use_move_base=False, img_dir=None, world_path = None, id = 0, cfg: Cfg=Cfg(), use_vlm = False):
+    def __init__(self, init_position, goal_position, use_move_base=False, img_dir=None, world_path=None, id=0,
+                 cfg: Cfg = Cfg(), use_vlm=False, data_mode='auto', save_image=True, algorithm_name='Unknown'):
         self.cfg = cfg
         self.state = RobotState()
         self.last_state = RobotState()
@@ -875,15 +938,26 @@ class JackalRos:
         self.id = id
 
         self.use_vlm = use_vlm
+        self.data_mode = data_mode
+        self.save_image = save_image
+        self.algorithm_name = algorithm_name
 
-        self._csv_path = os.path.join(img_dir, "data.csv") if img_dir else None
-        self._trajectory_path = os.path.join(img_dir, "data_trajectory.csv") if img_dir else None
+        # Set CSV file names based on data_mode
+        if data_mode == 'manual':
+            self._csv_path = os.path.join(img_dir, "data_fix.csv") if img_dir else None
+            self._trajectory_path = os.path.join(img_dir, "data_trajectory_fix.csv") if img_dir else None
+        else:  # auto mode
+            self._csv_path = os.path.join(img_dir, "data.csv") if img_dir else None
+            self._trajectory_path = os.path.join(img_dir, "data_trajectory.csv") if img_dir else None
         self._csv_header_written = os.path.exists(self._csv_path) if self._csv_path else False
 
         self.start = False
-        self.bad_vel = 0; self.vel_counter = 0
-        self.is_colliding = False; self.collision_count = 0
-        self.collision_start_time = None; self.last_collision_duration = None
+        self.bad_vel = 0;
+        self.vel_counter = 0
+        self.is_colliding = False;
+        self.collision_count = 0
+        self.collision_start_time = None;
+        self.last_collision_duration = None
         self.last_collision_time = None
         self.should_abort = False
 
@@ -921,23 +995,24 @@ class JackalRos:
     # ---------- ROS: subs/pubs & callbacks ----------
     def _setup_subscribers(self):
         self._laser_sub = rospy.Subscriber("/front/scan", LaserScan, self._on_laser, queue_size=1)
-        self._odom_sub  = rospy.Subscriber("/odometry/filtered", Odometry, self._on_odom, queue_size=1)
-        self._coll_sub  = rospy.Subscriber("/collision", Bool, self._on_collision)
+        self._odom_sub = rospy.Subscriber("/odometry/filtered", Odometry, self._on_odom, queue_size=1)
+        self._coll_sub = rospy.Subscriber("/collision", Bool, self._on_collision)
         self._lgoal_sub = rospy.Subscriber("/local_goal", Marker, self._on_local_goal)
         self._ggoal_sub = rospy.Subscriber("/global_goal", Marker, self._on_global_goal)
-        self._lplan_sub = rospy.Subscriber("/move_base/TrajectoryPlannerROS/local_plan", Path, self._on_local_plan, queue_size=1)
-
+        self._lplan_sub = rospy.Subscriber("/move_base/TrajectoryPlannerROS/local_plan", Path, self._on_local_plan,
+                                           queue_size=1)
 
         if self.img_dir:
             time.sleep(2.0)
-            self._costmap_sub = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self._on_costmap, queue_size=1)
-            self._path_sub    = rospy.Subscriber("/move_base/NavfnROS/plan", Path, self._on_global_path, queue_size=1)
+            self._costmap_sub = rospy.Subscriber("/move_base/local_costmap/costmap", OccupancyGrid, self._on_costmap,
+                                                 queue_size=1)
+            self._path_sub = rospy.Subscriber("/move_base/NavfnROS/plan", Path, self._on_global_path, queue_size=1)
 
     def _setup_publishers(self):
-        self.pub_dy   = rospy.Publisher('/dy_dt', Float64MultiArray, queue_size=1)
-        self.pub_param= rospy.Publisher('/params', Float64MultiArray, queue_size=1)
-        self.pub_lg   = rospy.Publisher('/current_local_goal', PointStamped, queue_size=1)
-        self.pub_gg   = rospy.Publisher('/current_global_goal', PointStamped, queue_size=1)
+        self.pub_dy = rospy.Publisher('/dy_dt', Float64MultiArray, queue_size=1)
+        self.pub_param = rospy.Publisher('/params', Float64MultiArray, queue_size=1)
+        self.pub_lg = rospy.Publisher('/current_local_goal', PointStamped, queue_size=1)
+        self.pub_gg = rospy.Publisher('/current_global_goal', PointStamped, queue_size=1)
         self.pub_smooth = rospy.Publisher("/smooth_global_path", Path, queue_size=1, latch=True)
         self.pub_scan_odom = rospy.Publisher("/scan_odom", PointCloud2, queue_size=1, latch=True)
         self.test = rospy.Publisher("/test", PointCloud2, queue_size=1, latch=True)
@@ -950,7 +1025,8 @@ class JackalRos:
 
         self.publish_scan_odom(stamp=msg.header.stamp)
 
-    def _on_costmap(self, msg: OccupancyGrid): self.costmap = msg
+    def _on_costmap(self, msg: OccupancyGrid):
+        self.costmap = msg
 
     def _on_global_path(self, msg: Path):
 
@@ -1035,8 +1111,8 @@ class JackalRos:
                 self.last_collision_duration = duration
 
     def _on_odom(self, msg: Odometry):
-        q1,q2,q3,q0 = msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w
-        theta = math.atan2(2*(q0*q3 + q1*q2), 1 - 2*(q2*q2 + q3*q3))
+        q1, q2, q3, q0 = msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z, msg.pose.pose.orientation.w
+        theta = math.atan2(2 * (q0 * q3 + q1 * q2), 1 - 2 * (q2 * q2 + q3 * q3))
         self.state.x = msg.pose.pose.position.x
         self.state.y = msg.pose.pose.position.y
         self.state.z = msg.pose.pose.position.z
@@ -1044,7 +1120,8 @@ class JackalRos:
         self.state.v = msg.twist.twist.linear.x
         self.state.w = msg.twist.twist.angular.z
         if not self.start and self.state.v >= 0.1:
-            self.start = True; self.start_time = rospy.get_time() if rospy else time.time()
+            self.start = True;
+            self.start_time = rospy.get_time() if rospy else time.time()
         elif self.start:
             if self.state.v <= 0.05: self.bad_vel += 1
             self.vel_counter += 1
@@ -1089,9 +1166,9 @@ class JackalRos:
         return n if n % 2 == 1 else n - 1
 
     def smooth_path_savgol(self, path_xy, step=0.10, win_base=11, win_strong=17, order=2,
-                                corridor_r=0.6,
-                                kappa_lo=0.3, kappa_hi=0.8,
-                                keep_ends=True):
+                           corridor_r=0.6,
+                           kappa_lo=0.3, kappa_hi=0.8,
+                           keep_ends=True):
 
         P0 = np.asarray(path_xy, float)
 
@@ -1175,14 +1252,16 @@ class JackalRos:
 
         return pts_odom
 
-
-
     def publish_goals(self):
         if not rospy: return
+
         def pub_point(pub, xy):
-            msg = PointStamped(); msg.header.stamp = rospy.Time.now(); msg.header.frame_id = "odom"
+            msg = PointStamped();
+            msg.header.stamp = rospy.Time.now();
+            msg.header.frame_id = "odom"
             msg.point.x, msg.point.y, msg.point.z = float(xy[0]), float(xy[1]), 0.0
             pub.publish(msg)
+
         pub_point(self.pub_lg, self.local_goal)
         if self.global_goal is not None: pub_point(self.pub_gg, self.global_goal)
 
@@ -1208,32 +1287,52 @@ class JackalRos:
     def set_dynamics_equation(self, action):
         if not rospy: return
         msg = Float64MultiArray()
-        msg.data = [] if not action else (action.tolist() if hasattr(action,'tolist') else list(action))
+        msg.data = [] if not action else (action.tolist() if hasattr(action, 'tolist') else list(action))
         self.pub_dy.publish(msg)
 
     def save_frame(self):
+
+        if not self.save_image: return False
 
         if self.img_dir is None or self.scan is None: return False
 
         if not os.path.exists(self.img_dir): os.makedirs(self.img_dir, exist_ok=True)
 
-        if self.use_vlm == False:
-            if (self.iteration % 2 == 0):
-                alg = "RL"
-            else:
-                alg = "HB"
-        else:
+        # 根据 algorithm_name 确定标签
+        if self.algorithm_name == 'APPLR':
+            alg = "RL"
+        elif self.algorithm_name == 'Heurstic_based':
+            alg = "HB"
+        elif self.algorithm_name in ['Qwen', 'ChatGPT', 'IL']:
             alg = "VLM"
+        elif self.algorithm_name in ['FTRL']:
+            alg = "FTRL"
+        else:
+            alg = "Unknown"
 
-        return self.drawer.save_frame(self.img_dir, self.state, self.scan, self.global_path, self.local_goal, self.global_goal, self.globalFunc.save_points, alg)
+        # Add "_fix" suffix for manual mode
+        if self.data_mode == 'manual':
+            alg = f"{alg}_fix"
+
+        return self.drawer.save_frame(self.img_dir, self.state, self.scan, self.global_path, self.local_goal,
+                                      self.global_goal, self.globalFunc.save_points, alg)
 
     def save_info(self, action, start, done, info):
-        if self.use_vlm == False:
-            if not self.img_dir:
-                return
+        if not self.img_dir:
+            return
 
-            alg = "RL" if (self.iteration % 2 == 0) else "HB"
+        if self.algorithm_name == 'APPLR':
+            alg = "RL"
+        elif self.algorithm_name == 'Heurstic_based':
+            alg = "HB"
+        elif self.algorithm_name in ['Qwen', 'ChatGPT', 'IL']:
+            alg = "VLM"
+        elif self.algorithm_name == 'FTRL':
+            alg = "FTRL"
+        else:
+            alg = "Unknown"
 
+        if alg in ['RL', 'HB']:
             if start:
                 self.start_frame_id = self.drawer.frame_id
 
@@ -1246,21 +1345,42 @@ class JackalRos:
             if not self.should_save_frame():
                 return
 
-            result = self.drawer.generate_img()
+            if self.save_image:
+                result = self.drawer.generate_img()
+                self._write_to_csv(result)
 
-            self._write_to_csv(result)
-        else:
+        elif alg in ['FTRL']:
             if start:
-                self.start_frame_id = self.drawer.frame_id
                 self.save_frame()
-                self.drawer.generate_img()
+                self.start_frame_id = self.drawer.frame_id
+                self.drawer.img_name = f"{alg}_{self.drawer.frame_id:06d}.png"
+                if self.save_image:
+                    self.drawer.generate_img()
             elif done:
-                self._save_trajectory_summary("VLM", info)
-                self._clean_imgs()
+                self.save_frame()
+                if self.save_image:
+                    self.drawer.generate_img()
                 return
             else:
                 self.save_frame()
-                self.drawer.generate_img()
+                if self.save_image:
+                    self.drawer.generate_img()
+
+        else:  # VLM
+            if start:
+                self.save_frame()
+                self.start_frame_id = self.drawer.frame_id
+                if self.save_image:
+                    self.drawer.generate_img()
+            elif done:
+                self._save_trajectory_summary(alg, info)
+                if self.save_image:
+                    self._clean_imgs()
+                return
+            else:
+                if self.save_image:
+                    self.save_frame()
+                    self.drawer.generate_img()
 
     def should_save_frame(self):
 
@@ -1319,12 +1439,16 @@ class JackalRos:
 
         return True
 
-
     def reset(self, init_params):
-        self.is_colliding = False; self.collision_count = 0
-        self.collision_start_time = None; self.last_collision_duration = None
-        self.bad_vel = 0; self.vel_counter = 0; self.start = False
-        self.start_time = 0; self.last_action = init_params
+        self.is_colliding = False;
+        self.collision_count = 0
+        self.collision_start_time = None;
+        self.last_collision_duration = None
+        self.bad_vel = 0;
+        self.vel_counter = 0;
+        self.start = False
+        self.start_time = 0;
+        self.last_action = init_params
         self.last_collision_time = None
         self.should_abort = False
         self.path_curvature = 0.0
@@ -1646,7 +1770,7 @@ class JackalRos:
         self._append_csv(test_path,
                          {k: v for k, v in summary.items() if k != "Start_frame_id" and k != "Done_frame_id"})
 
-        self.iteration += 1
+        self.iteration += 2
 
     def _get_action_value(self, action, idx, default=None):
 

@@ -1,0 +1,7 @@
+assistant_key: gpt
+data_path: null
+eval_data_path: null
+image_folder: null
+num_frames: 8
+user_key: human
+video_folder: null

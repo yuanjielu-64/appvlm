@@ -1,0 +1,156 @@
+_n_gpu: 1
+accelerator_config:
+  dispatch_batches: null
+  even_batches: true
+  gradient_accumulation_kwargs: null
+  non_blocking: false
+  split_batches: false
+  use_configured_state: false
+  use_seedable_sampler: true
+adafactor: false
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_epsilon: 1.0e-08
+auto_find_batch_size: false
+average_tokens_across_devices: false
+batch_eval_metrics: false
+bf16: false
+bf16_full_eval: false
+data_seed: null
+dataloader_drop_last: false
+dataloader_num_workers: 0
+dataloader_persistent_workers: false
+dataloader_pin_memory: true
+dataloader_prefetch_factor: null
+ddp_backend: null
+ddp_broadcast_buffers: null
+ddp_bucket_cap_mb: null
+ddp_find_unused_parameters: null
+ddp_timeout: 1800
+debug: []
+deepspeed: null
+disable_tqdm: false
+dispatch_batches: null
+do_eval: false
+do_predict: false
+do_train: false
+eval_accumulation_steps: null
+eval_delay: 0
+eval_do_concat_batches: true
+eval_on_start: false
+eval_steps: null
+eval_strategy: !!python/object/apply:transformers.trainer_utils.IntervalStrategy
+- 'no'
+eval_use_gather_object: false
+evaluation_strategy: null
+fp16: false
+fp16_backend: auto
+fp16_full_eval: false
+fp16_opt_level: O1
+fsdp: []
+fsdp_config:
+  min_num_params: 0
+  xla: false
+  xla_fsdp_grad_ckpt: false
+  xla_fsdp_v2: false
+fsdp_min_num_params: 0
+fsdp_transformer_layer_cls_to_wrap: null
+full_determinism: false
+gradient_accumulation_steps: 1
+gradient_checkpointing: false
+gradient_checkpointing_kwargs: null
+greater_is_better: null
+group_by_length: false
+half_precision_backend: auto
+hub_always_push: false
+hub_model_id: null
+hub_private_repo: null
+hub_strategy: !!python/object/apply:transformers.trainer_utils.HubStrategy
+- every_save
+hub_token: null
+ignore_data_skip: false
+include_for_metrics: []
+include_inputs_for_metrics: false
+include_num_input_tokens_seen: false
+include_tokens_per_second: false
+jit_mode_eval: false
+label_names: null
+label_smoothing_factor: 0.0
+learning_rate: 5.0e-05
+length_column_name: length
+load_best_model_at_end: false
+local_rank: 0
+log_level: passive
+log_level_replica: warning
+log_on_each_node: true
+logging_dir: trainer_output/runs/Dec30_16-32-27_yuanjielu-MS-7C84
+logging_first_step: false
+logging_nan_inf_filter: true
+logging_steps: 500
+logging_strategy: !!python/object/apply:transformers.trainer_utils.IntervalStrategy
+- steps
+lr_scheduler_kwargs: {}
+lr_scheduler_type: !!python/object/apply:transformers.trainer_utils.SchedulerType
+- linear
+mask_question_tokens: true
+max_grad_norm: 1.0
+max_steps: -1
+metric_for_best_model: null
+model_max_length: 1024
+mp_parameters: ''
+neftune_noise_alpha: null
+no_cuda: false
+num_train_epochs: 3.0
+optim: !!python/object/apply:transformers.training_args.OptimizerNames
+- adamw_torch
+optim_args: null
+optim_target_modules: null
+output_dir: trainer_output
+overwrite_output_dir: false
+past_index: -1
+per_device_eval_batch_size: 8
+per_device_train_batch_size: 8
+per_gpu_eval_batch_size: null
+per_gpu_train_batch_size: null
+prediction_loss_only: false
+push_to_hub: false
+push_to_hub_model_id: null
+push_to_hub_organization: null
+push_to_hub_token: null
+ray_scope: last
+remove_unused_columns: false
+report_to:
+- tensorboard
+- wandb
+restore_callback_states_from_checkpoint: false
+resume_from_checkpoint: null
+run_name: trainer_output
+save_on_each_node: false
+save_only_model: false
+save_safetensors: true
+save_steps: 500
+save_strategy: !!python/object/apply:transformers.trainer_utils.SaveStrategy
+- steps
+save_total_limit: null
+seed: 42
+skip_memory_metrics: true
+split_batches: null
+tf32: null
+torch_compile: false
+torch_compile_backend: null
+torch_compile_mode: null
+torch_empty_cache_steps: null
+torchdynamo: null
+tpu_metrics_debug: false
+tpu_num_cores: null
+train_vision_encoder: false
+train_vision_projector: false
+use_cpu: false
+use_flash_attn: false
+use_ipex: false
+use_legacy_prediction_loop: false
+use_liger_kernel: false
+use_mps_device: false
+warmup_ratio: 0.0
+warmup_steps: 0
+weight_decay: 0.0

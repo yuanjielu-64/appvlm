@@ -1,0 +1,252 @@
+#!/bin/bash
+# 批量世界评估 - 在 Singularity 容器中运行多个世界的完整评估
+# 用途: 完整性能评估，支持多实例并行运行，默认评估300个世界x3次
+#
+# 用法:
+#   bash eval_batch_worlds_singularity.sh --id ID --qwen_port PORT [--start N] [--end N] [--runs N] [--policy NAME]
+#
+# 示例:
+#   bash eval_batch_worlds_singularity.sh --id 1 --qwen_port 5000                      # 实例1: 评估世界0-299 x3次
+#   bash eval_batch_worlds_singularity.sh --id 2 --qwen_port 5001 --policy mppi_qwen  # 实例2: 使用mppi_qwen
+#   bash eval_batch_worlds_singularity.sh --id 3 --qwen_port 5002 --start 0 --end 99  # 实例3: 只评估世界0-99
+
+set -e
+
+# ============================================================
+# 参数配置
+# ============================================================
+
+# 获取脚本目录和项目路径
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROS_JACKAL_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"  # script/qwen/ -> ros_jackal/
+CONTAINER_IMAGE="${ROS_JACKAL_DIR}/jackal.sif"
+
+# 默认值
+START_WORLD=0
+END_WORLD=299
+RUNS_PER_WORLD=3
+POLICY_NAME="ddp_qwen"
+CONTAINER_ID=""
+QWEN_PORT=""
+ACTOR_ID=""
+
+# 解析命名参数
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --id)
+      CONTAINER_ID="$2"
+      shift 2
+      ;;
+    --qwen_port)
+      QWEN_PORT="$2"
+      shift 2
+      ;;
+    --start)
+      START_WORLD="$2"
+      shift 2
+      ;;
+    --end)
+      END_WORLD="$2"
+      shift 2
+      ;;
+    --runs)
+      RUNS_PER_WORLD="$2"
+      shift 2
+      ;;
+    --policy)
+      POLICY_NAME="$2"
+      shift 2
+      ;;
+    --actor_id)
+      ACTOR_ID="$2"
+      shift 2
+      ;;
+    *)
+      echo "未知参数: $1"
+      echo "用法: $0 --id CONTAINER_ID --qwen_port PORT [--start N] [--end N] [--runs N] [--policy NAME] [--actor_id ID]"
+      exit 1
+      ;;
+  esac
+done
+
+# 检查必需参数
+if [ -z "$CONTAINER_ID" ]; then
+    echo "❌ 错误: 必须指定 --id 参数"
+    echo "用法: $0 --id CONTAINER_ID --qwen_port PORT"
+    exit 1
+fi
+
+if [ -z "$QWEN_PORT" ]; then
+    echo "❌ 错误: 必须指定 --qwen_port 参数"
+    echo "用法: $0 --id CONTAINER_ID --qwen_port PORT"
+    exit 1
+fi
+
+# ============================================================
+# 端口和环境配置 (参考 hopper 脚本)
+# ============================================================
+
+# 使用 CONTAINER_ID 创建唯一的端口，避免冲突
+ROS_PORT=$((11311 + CONTAINER_ID))
+GAZEBO_PORT=$((11345 + CONTAINER_ID))
+
+export ROS_HOSTNAME=localhost
+export ROS_MASTER_URI=http://localhost:${ROS_PORT}
+export GAZEBO_MASTER_URI=http://localhost:${GAZEBO_PORT}
+
+# 创建唯一的 ROS 日志目录
+export ROS_LOG_DIR=/tmp/ros_instance_${CONTAINER_ID}
+mkdir -p $ROS_LOG_DIR
+chmod 777 $ROS_LOG_DIR
+
+# Qwen 服务配置
+export QWEN_HOST="localhost"
+export QWEN_PORT="${QWEN_PORT}"
+QWEN_URL="http://${QWEN_HOST}:${QWEN_PORT}"
+
+# 禁用 GPU (Gazebo 仿真不需要 GPU，避免 GLIBC 版本冲突)
+export USE_GPU=0
+
+# 检查容器是否存在
+if [ ! -f "$CONTAINER_IMAGE" ]; then
+    echo "❌ 容器镜像不存在: $CONTAINER_IMAGE"
+    echo ""
+    echo "请确保容器位于: ${ROS_JACKAL_DIR}/jackal.sif"
+    exit 1
+fi
+
+echo "=================================================="
+echo "  Singularity 批量评估 (实例 #${CONTAINER_ID})"
+echo "=================================================="
+echo "容器镜像:    $CONTAINER_IMAGE"
+echo "环境范围:    $START_WORLD - $END_WORLD"
+echo "每环境运行:  ${RUNS_PER_WORLD} 次"
+echo "策略名称:    $POLICY_NAME"
+echo "--------------------------------------------------"
+echo "ROS 配置:"
+echo "  ROS_MASTER_URI: $ROS_MASTER_URI"
+echo "  ROS_LOG_DIR:    $ROS_LOG_DIR"
+echo "  Qwen服务:       $QWEN_URL"
+echo "=================================================="
+echo ""
+
+# ============================================================
+# 检查 Qwen 服务并获取 checkpoint 信息
+# ============================================================
+
+echo "检查 Qwen 服务..."
+if ! curl -s --max-time 5 "${QWEN_URL}/health" > /dev/null 2>&1; then
+    echo "❌ 无法连接到 Qwen 服务: ${QWEN_URL}"
+    echo ""
+    echo "请先启动 Qwen 服务:"
+    echo "  cd ${ROS_JACKAL_DIR}/script/qwen"
+    echo "  bash start_qwen_service.sh"
+    echo ""
+    exit 1
+fi
+
+echo "✓ Qwen 服务正常"
+
+# 如果没有指定 ACTOR_ID，尝试从 Qwen 服务获取 checkpoint 编号
+if [ -z "$ACTOR_ID" ]; then
+    CHECKPOINT_PATH=$(curl -s "${QWEN_URL}/health" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('current_checkpoint', ''))
+except:
+    print('')
+" 2>/dev/null)
+
+    if [ -n "$CHECKPOINT_PATH" ]; then
+        echo "  当前 checkpoint: $CHECKPOINT_PATH"
+        # 提取 checkpoint 编号
+        if [[ $CHECKPOINT_PATH =~ checkpoint-([0-9]+) ]]; then
+            ACTOR_ID="${BASH_REMATCH[1]}"
+            echo "  提取的 actor_id: $ACTOR_ID"
+        else
+            ACTOR_ID="0"
+            echo "  无法提取 checkpoint 编号，使用默认 actor_id=0"
+        fi
+    else
+        ACTOR_ID="0"
+        echo "  无法获取 checkpoint 路径，使用默认 actor_id=0"
+    fi
+fi
+echo ""
+
+# ============================================================
+# 计算总任务数
+# ============================================================
+
+TOTAL_ENVS=$((END_WORLD - START_WORLD + 1))
+TOTAL_RUNS=$((TOTAL_ENVS * RUNS_PER_WORLD))
+
+
+# ============================================================
+# 切换到 ros_jackal 目录 (singularity_run.sh 使用 pwd)
+# ============================================================
+
+cd "${ROS_JACKAL_DIR}"
+
+# ============================================================
+# 运行评估循环 (使用 singularity_run.sh)
+# ============================================================
+
+for i in $(seq $END_WORLD -1 $START_WORLD); do  # 倒序
+    for j in $(seq 1 $RUNS_PER_WORLD); do
+        echo "========================================="
+        echo "World: $i, Run: $j/$RUNS_PER_WORLD"
+        echo "Time: $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "========================================="
+
+        # 清理当前实例使用端口的残留进程
+        fuser -k ${ROS_PORT}/tcp 2>/dev/null || true
+        fuser -k ${GAZEBO_PORT}/tcp 2>/dev/null || true
+        sleep 1
+
+        # 设置实例 ID（用于容器隔离）
+        export INSTANCE_ID=${CONTAINER_ID}
+
+        # 使用 singularity_run.sh 运行评估
+        ./singularity_run.sh ${CONTAINER_IMAGE} \
+            python3 script/qwen/evaluate_qwen_single.py \
+                --world_idx $i \
+                --qwen_url ${QWEN_URL} \
+                --policy_name ${POLICY_NAME} \
+                --id ${ACTOR_ID} \
+                --buffer_path buffer/ \
+                --ros_port ${ROS_PORT}
+
+        echo "World $i Run $j completed"
+        echo ""
+
+        sleep 4
+    done
+done
+
+echo ""
+echo "=================================================="
+echo "✓ 实例 #${CONTAINER_ID} 所有评估完成！"
+echo "=================================================="
+echo "Time: $(date '+%Y-%m-%d %H:%M:%S')"
+echo "总运行次数: $TOTAL_RUNS"
+echo "环境范围: $START_WORLD - $END_WORLD"
+echo "ROS_MASTER_URI: $ROS_MASTER_URI"
+echo "=================================================="
+echo ""
+
+# 清理临时目录
+echo "清理临时文件..."
+INSTANCE_TMP="/tmp/singularity_instance_${CONTAINER_ID}"
+if [ -d "$INSTANCE_TMP" ]; then
+    rm -rf "$INSTANCE_TMP"
+    echo "✓ 已删除临时目录: $INSTANCE_TMP"
+fi
+
+# 清理 ROS 日志目录（可选）
+if [ -d "$ROS_LOG_DIR" ]; then
+    echo "ℹ️  ROS 日志保留在: $ROS_LOG_DIR"
+    # 如果需要删除，取消注释下面这行
+    # rm -rf "$ROS_LOG_DIR"
+fi

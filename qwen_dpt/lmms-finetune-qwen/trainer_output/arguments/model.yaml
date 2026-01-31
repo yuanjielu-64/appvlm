@@ -1,0 +1,4 @@
+model_id: llava-1.5-7b
+model_local_path: llava-hf/llava-1.5-7b-hf
+num_params: null
+planner: null

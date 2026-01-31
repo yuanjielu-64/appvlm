@@ -46,6 +46,10 @@ class DWAParamContinuous(DWABase):
         clipped_action = []
         for param_value, param_name in zip(action, self.param_list):
             low, high = RANGE_DICT[param_name]
+            if (param_name == "TrajectoryPlannerROS/vx_samples"):
+                param_value = int(param_value)
+            if (param_name == "TrajectoryPlannerROS/vtheta_samples"):
+                param_value = int(param_value)
             clipped_value = np.clip(param_value, low, high)
             clipped_action.append(clipped_value)
 

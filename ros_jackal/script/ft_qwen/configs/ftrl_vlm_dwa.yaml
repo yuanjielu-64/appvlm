@@ -1,0 +1,74 @@
+# FTRL配置文件 - VLM+DPT + TD3 for DWA
+#
+# 用途: 基于预训练VLM+DPT进行强化学习微调
+# 算法: TD3 (Twin Delayed DDPG)
+# 规划器: DWA (Dynamic Window Approach)
+
+env_config:
+  env_id: "dwa_param-v0"
+  save_path: "../logging/"
+  seed: 1
+  stack_frame: 1  # VLM使用RGB图像，不需要stack
+  use_condor: false
+  shaping_reward: true
+  use_pretrain: null  # 如果要继续训练已有checkpoint，设置为路径
+
+  kwargs:
+    world_name: "BARN"
+    gui: false
+    action_type: "DWA"  # DWA, TEB, MPPI, DDP
+
+training_config:
+  algorithm: "TD3_FTRL_VLM_DWA"
+
+  # ===== VLM+DPT配置 =====
+  # 重要: 修改为你的checkpoint路径
+  vlm_checkpoint_path: "/home/yuanjielu/robot_navigation/noetic/appvlm_ws/src/ros_jackal/data/ddp_qwen_15/model/qwen2.5-vl-regression_lora-True_ddp_regression_2_7b_num_0/checkpoint-20000"
+
+  # 冻结策略
+  freeze_vlm_actor: true    # Actor的VLM冻结 (推荐True，VLM太大)
+  freeze_dpt_actor: false   # Actor的DPT可训练 (FTRL微调)
+  freeze_dpt_critic: true   # Critic的DPT冻结 (节省显存)
+
+  # ===== 学习率 (VLM微调需要更小的lr) =====
+  actor_lr: 1.0e-5   # 比APPLR小10倍 (APPLR: 3e-4)
+  critic_lr: 3.0e-4
+
+  # ===== Buffer配置 =====
+  buffer_size: 1000000
+
+  # ===== TD3超参数 =====
+  policy_args:
+    gamma: 0.99           # 折扣因子
+    tau: 0.005            # 软更新系数
+    policy_noise: 0.2     # 目标策略平滑噪声
+    noise_clip: 0.5       # 噪声裁剪
+    n_step: 4             # N-step return
+    update_actor_freq: 2  # Actor延迟更新频率
+    exploration_noise: 0.1
+
+  # ===== 探索噪声 (VLM预训练好了，可以减少探索) =====
+  exploration_noise_start: 0.05  # 起始噪声 (APPLR: 0.1)
+  exploration_noise_end: 0.01    # 结束噪声
+
+  # ===== 预收集和日志 =====
+  pre_collect: 10000      # 预收集经验数
+  log_intervals: 10       # 日志间隔
+  use_actor: 1            # 使用的actor数量
+
+  # ===== 训练参数 =====
+  training_args:
+    max_step: 1000000         # 总训练步数
+    collect_per_step: 1000    # 每次收集步数
+    update_per_step: 50       # 每次收集后更新次数
+    batch_size: 256           # 批大小
+
+# ===== 使用说明 =====
+# 1. 修改 vlm_checkpoint_path 为你的VLM+DPT checkpoint路径
+# 2. 运行训练:
+#    cd /path/to/ros_jackal
+#    python rlft/train.py \
+#      --config_path script/ft_qwen/configs/ \
+#      --config_file ftrl_vlm_dwa \
+#      --buffer_path buffer/ftrl_vlm_dwa \
+#      --logging_path logging/ftrl_vlm_dwa

@@ -13,6 +13,8 @@ import copy
 
 from envs.utils import GazeboSimulation, Teb_move_base, JackalRos
 
+GAZEBO_PORT_BASE = 14000
+
 class TebBase(gym.Env):
     def __init__(
         self,
@@ -32,7 +34,12 @@ class TebBase(gym.Env):
         img_dir=None,
         pid = 0,
         WORLD_PATH=None,
-        use_vlm = False
+        use_vlm = False,
+        data_mode = 'auto',
+        ros_port = 11311,
+        gazebo_port = None,
+        save_image = True,
+        algorithm_name = 'Unknown'
     ):
         """Base RL env that initialize jackal simulation in Gazebo
         """
@@ -59,9 +66,17 @@ class TebBase(gym.Env):
         self.smoothness_reward = smoothness_reward
 
         self.use_vlm = use_vlm
+        self.data_mode = data_mode
+        self.save_image = save_image
+        self.algorithm_name = algorithm_name
+
+        # 根据算法类型确定观测和行为模式
+        self.obs_type = self._get_obs_type()
 
         self.img_dir = img_dir
         self.p_id = pid
+        self.ros_port = ros_port  # 用于 close() 时只杀自己的进程
+        self.gazebo_port = gazebo_port if gazebo_port else (GAZEBO_PORT_BASE + pid)  # TEB: 14000-14299
         self.WORLD_PATH = WORLD_PATH
 
         self.launch_gazebo(world_name=self.world_name, gui=self.gui, verbose=self.verbose)
@@ -106,9 +121,17 @@ class TebBase(gym.Env):
 
         time.sleep(10)  # sleep to wait until the gazebo being created
 
-        # Initialize ROS node (soft_close() should have reset the state)
-        rospy.init_node('gym', anonymous=True, log_level=rospy.FATAL)
+        rospy.logwarn(">>>>>>>>>>>>>>>>>> !!Load world2: %s <<<<<<<<<<<<<<<<<<" % (world_name))
+
+        # Initialize ROS node only if not already initialized
+        if not rospy.core.is_initialized():
+            rospy.init_node('gym_teb', anonymous=True, log_level=rospy.FATAL)
+            rospy.logwarn(">>>>>>>>>>>>>>>>>> ROS node initialized <<<<<<<<<<<<<<<<<<")
+        else:
+            rospy.logwarn(">>>>>>>>>>>>>>>>>> ROS node already initialized, skipping <<<<<<<<<<<<<<<<<<")
+
         rospy.set_param('/use_sim_time', True)
+        rospy.logwarn(">>>>>>>>>>>>>>>>>> !!Load world3: %s <<<<<<<<<<<<<<<<<<" % (world_name))
 
     def launch_move_base(self, goal_position, base_local_planner):
         rospack = rospkg.RosPack()
@@ -131,10 +154,8 @@ class TebBase(gym.Env):
         """reset the environment
         """
         self.step_count = 0
-
         self.gazebo_sim.reset()
         self.jackal_ros.reset(self.param_init)
-
         self.gazebo_sim.unpause()
         self._reset_move_base()
         self.jackal_ros.set_params(self.param_init)
@@ -149,10 +170,8 @@ class TebBase(gym.Env):
         self.traj_pos = []
         self.smoothness = 0
 
-        if self.use_vlm == False:
-            return obs
-        else:
-            return [self.jackal_ros.state.v, self.jackal_ros.state.w]
+        # 统一的返回逻辑
+        return self._format_observation(obs)
 
     def _reset_move_base(self):
         # reset the move_base
@@ -173,69 +192,36 @@ class TebBase(gym.Env):
     def step(self, action):
         """take an action and step the environment
         """
-        if self.use_vlm == False:
-            alg = "RL" if (self.jackal_ros.iteration % 2 == 0) else "HB"
+        # 保存状态（所有算法都需要）
+        self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
 
-            self.jackal_ros.save_frame()
+        self.jackal_ros.save_frame()
 
-            self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
+        # 根据算法类型处理动作
+        processed_action = self._process_action(action)
+        self._take_action(processed_action)
+        self.step_count += 1
 
-            if alg == "RL":
-                action_0 = action
-                self._take_action(action_0)
-            else:
-                if self.jackal_ros.row != None:
-
-                    action_0 = [self.jackal_ros.row["max_vel_x"],
-                              self.jackal_ros.row["max_vel_x_backwards"],
-                              self.jackal_ros.row["max_vel_theta"],
-                              self.jackal_ros.row["dt_ref"],
-                              self.jackal_ros.row["min_obstacle_dist"],
-                              self.jackal_ros.row["inflation_dist"],
-                              self.jackal_ros.row["final_inflation"],
-                              ]
-
-                    self._take_action(action_0)
-                else:
-                    action_0 = action
-                    self._take_action(action_0)
-
-            self.step_count += 1
-
-            self.gazebo_sim.unpause()
-            obs = self._get_observation()
-
-            self.gazebo_sim.pause()
-
-        else:
-            self.jackal_ros.last_state = copy.deepcopy(self.jackal_ros.state)
-
-            action_0 = action
-            self._take_action(action_0)
-
-            self.step_count += 1
-
-            self.gazebo_sim.unpause()
-
-            obs = self._get_observation()
-
-            self.gazebo_sim.pause()
+        # 获取观测和奖励
+        self.gazebo_sim.unpause()
+        obs = self._get_observation()
+        self.gazebo_sim.pause()
 
         rew = self._get_reward()
         done, status = self._get_done()
         info = self._get_info(status)
 
+        # 保存信息
         if done == True:
-            self.jackal_ros.save_info(action_0, False, True, info)
+            self.jackal_ros.save_info(action, False, True, info)
         else:
-            self.jackal_ros.save_info(action_0, False, False, info)
+            self.jackal_ros.save_info(action, False, False, info)
 
         pos = self.gazebo_sim.get_model_state().pose.position
         self.traj_pos.append((pos.x, pos.y))
-        if self.use_vlm == False:
-            return obs, rew, done, info
-        else:
-            return [self.jackal_ros.state.v, self.jackal_ros.state.w], rew, done, info
+
+        # 统一的返回逻辑
+        return self._format_observation(obs), rew, done, info
 
     def _reset_reward(self):
         self.traj_pos = []
@@ -247,6 +233,48 @@ class TebBase(gym.Env):
             [robot_pos[0], robot_pos[1]],
             self.global_goal
         )
+
+    def _get_obs_type(self):
+        """根据算法类型确定观测空间类型"""
+        if self.algorithm_name in ['APPLR', 'Heurstic_based']:
+            return 'generate'  # 返回完整观测 (laser + goal)
+        elif self.algorithm_name in ['ChatGPT', 'IL', 'Qwen']:
+            return 'predict'  # 只返回速度 [v, w]
+        else:
+            return 'generate'  # 默认
+
+    def _format_observation(self, obs):
+        """根据算法类型格式化观测"""
+        if self.obs_type == 'predict':
+            return [self.jackal_ros.state.v, self.jackal_ros.state.w]
+        else:
+            return obs
+
+    def _process_action(self, action):
+        """根据算法类型处理动作"""
+        if self.algorithm_name == 'Heurstic_based':
+            return self._get_heuristic_action(action)
+        else:
+            return action
+
+    def _get_heuristic_action(self, fallback_action):
+        """获取启发式参数（TEB专用）"""
+        if self.jackal_ros.row is not None:
+            return [
+                self.jackal_ros.row["max_vel_x"],
+                self.jackal_ros.row["max_vel_x_backwards"],
+                self.jackal_ros.row["max_vel_theta"],
+                self.jackal_ros.row["dt_ref"],
+                self.jackal_ros.row["min_obstacle_dist"],
+                self.jackal_ros.row["inflation_dist"],
+                self.jackal_ros.row["final_inflation"],
+            ]
+        else:
+            return fallback_action
+
+    def _should_save_frame(self):
+        """判断是否需要保存帧数据"""
+        return self.save_image
 
     def _take_action(self, action):
         raise NotImplementedError()
@@ -284,8 +312,8 @@ class TebBase(gym.Env):
 
         laser_scan = np.array(self.jackal_ros.scan.ranges)
         d = np.mean(sorted(laser_scan)[:10])
-        if d < 0.05:
-            penalty_ratio = (1 - d / 0.05) ** 2
+        if d < 0.15:
+            penalty_ratio = (1 - d / 0.15) ** 2
             rew += self.collision_reward * penalty_ratio
 
         robot_pos = self.jackal_ros.state.get_robot_state()
@@ -295,12 +323,14 @@ class TebBase(gym.Env):
         )
 
         distance_progress = self.last_distance - current_distance
-        rew += distance_progress * 10
+        rew += distance_progress * 5
         self.last_distance = current_distance
 
         smoothness = self._compute_angle(len(self.traj_pos) - 1)
         self.smoothness += smoothness
 
+        # Reward clipping: 最低不低于 failure_reward
+        rew = max(rew, self.failure_reward)
         return rew
 
     def _compute_angle(self, idx):
@@ -352,7 +382,10 @@ class TebBase(gym.Env):
             collision=self.collision_count,
             status=status,
             recovery= 1.0 * (bn + 0.0001) / (nn + 0.0001),
-            smoothness=self.smoothness
+            smoothness=self.smoothness,
+            img_label=self.jackal_ros.drawer.img_name,
+            img_PIL=self.jackal_ros.drawer.img_PIL,
+            last_state=[self.jackal_ros.last_state.v, self.jackal_ros.last_state.w]
         )
 
     def _get_local_goal(self):
@@ -365,17 +398,23 @@ class TebBase(gym.Env):
         return local_goal
 
     def close(self):
-        # These will make sure all the ros processes being killed
-        os.system("killall -9 rosmaster")
-        os.system("killall -9 gzclient")
-        os.system("killall -9 gzserver")
-        os.system("killall -9 roscore")
+        os.system(f"fuser -k {self.ros_port}/tcp 2>/dev/null || true")
+        os.system(f"fuser -k {self.gazebo_port}/tcp 2>/dev/null || true")
+
+        import rospy.impl.registration
+        rospy.core._shutdown_flag = False
+        rospy.core._in_shutdown = False
+        rospy.core.is_shutdown_requested = lambda: False
+        rospy.core.is_initialized = lambda: False
+        rospy.impl.registration._init_node_args = None
+
+        print("Soft close completed")
 
     def _set_start_goal_BARN(self, init_position, goal_position):
         """Use predefined start and goal position for BARN dataset
         """
         self.gazebo_sim = GazeboSimulation(init_position = init_position)
-        self.jackal_ros = JackalRos(init_position = init_position, goal_position = goal_position, use_move_base = True, img_dir = self.img_dir, world_path = self.WORLD_PATH, id = self.p_id, use_vlm = self.use_vlm)
+        self.jackal_ros = JackalRos(init_position = init_position, goal_position = goal_position, use_move_base = True, img_dir = self.img_dir, world_path = self.WORLD_PATH, id = self.p_id, use_vlm = self.use_vlm, data_mode = self.data_mode, save_image = self.save_image, algorithm_name = self.algorithm_name)
         self.start_position = init_position
         self.global_goal = goal_position
         self.local_goal = [0, 0, 0]
@@ -405,50 +444,12 @@ class TebBaseLaser(TebBase):
         )
 
     def soft_close(self):
-        """只关闭 Gazebo 和 move_base，保留 roscore"""
-        import rospy.impl.registration
-
-        rospy.logwarn("Soft closing environment (keeping roscore)...")
-
-        try:
-            self.move_base_process.terminate()
-            self.move_base_process.wait(timeout=3)
-            rospy.loginfo("move_base terminated gracefully")
-        except:
-            rospy.logwarn("Force killing move_base")
-            self.move_base_process.kill()
-
-        time.sleep(1)
-
-        # 2. 再终止 Gazebo
 
         self.gazebo_process.terminate()
         self.gazebo_process.wait()
-        rospy.loginfo("Gazebo terminated gracefully")
 
-        # 3. Shutdown ROS node and reset initialization state
-        if rospy.core.is_initialized():
-            rospy.signal_shutdown('Environment closed')
-            time.sleep(0.5)
-            # Reset internal state to allow fresh reinitialization
-            rospy.core._shutdown_flag = False
-            rospy.core._in_shutdown = False
-            rospy.core.is_shutdown_requested = lambda: False
-            # Critical: reset the initialized flag
-            rospy.core.is_initialized = lambda: False
-            rospy.impl.registration._init_node_args = None
-
-        # # 3. 强力清理所有Gazebo和相关进程
-        rospy.logwarn("Force cleaning all Gazebo processes...")
-        os.system("pkill -9 -f gzclient")
-        time.sleep(0.5)
-        os.system("pkill -9 -f gzserver")
-        time.sleep(0.5)
-        os.system("pkill -9 -f 'roslaunch.*gazebo'")
-        os.system("pkill -9 -f move_base")
-        time.sleep(2)
-
-        rospy.logwarn("Soft close completed")
+        self.move_base_process.terminate()
+        self.move_base_process.wait()
 
     def _get_laser_scan(self):
         """Get 720 dim laser scan

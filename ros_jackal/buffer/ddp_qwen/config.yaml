@@ -20,7 +20,7 @@ env_config:
     gui: false
     rviz_gui: true
     verbose: false
-    max_step: 120
+    max_step: 200
     time_step: 0.5
     slack_reward: 0
     failure_reward: -100

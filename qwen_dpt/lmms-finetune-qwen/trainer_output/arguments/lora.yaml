@@ -1,0 +1,8 @@
+lora_alpha: 16
+lora_bias: none
+lora_dropout: 0.05
+lora_r: 8
+lora_weight_path: ''
+q_lora: false
+use_lora: true
+use_vision_lora: true

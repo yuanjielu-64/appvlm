@@ -9,8 +9,16 @@ import re
 import pickle
 import shutil
 import logging
+import sys
 
 from sympy.physics.units import length
+
+# Patch for numpy version compatibility (numpy 1.x vs 2.x)
+# numpy 2.x uses numpy._core, but older pickle files from numpy 1.x reference it
+if not hasattr(np, '_core'):
+    sys.modules['numpy._core'] = np.core
+    if hasattr(np.core, '_multiarray_umath'):
+        sys.modules['numpy._core._multiarray_umath'] = np.core._multiarray_umath
 
 
 class LocalCollector(object):
@@ -134,10 +142,14 @@ class CondorCollector(object):
         # save the current policy
         self.update_policy()
         # save the env config the actor should read from
-        shutil.copyfile(
-            env.config["env_config"]["config_path"],
-            join(self.buffer_path, "config.yaml")
-        )
+        src_config = env.config["env_config"]["config_path"]
+        dst_config = join(self.buffer_path, "config.yaml")
+
+        # Only copy if source and destination are different files
+        if os.path.abspath(src_config) != os.path.abspath(dst_config):
+            shutil.copyfile(src_config, dst_config)
+        else:
+            print(f"    >>>> Config already exists at {dst_config}, skipping copy")
 
     def buffer_expand(self, traj):
         for i in range(len(traj)):
@@ -181,16 +193,19 @@ class CondorCollector(object):
                 if os.path.exists(base):
 
                     for filename in os.listdir(base):
-                        if filename != 'trajectory_results.txt':
-                            file_path = os.path.join(base, filename)
-                            try:
-                                if os.path.isfile(file_path):
-                                    os.remove(file_path)
-                                elif os.path.isdir(file_path):
-                                    import shutil
-                                    shutil.rmtree(file_path)
-                            except OSError as e:
-                                print(f"删除失败: {file_path}, 错误: {e}")
+                        # Preserve learned directory, learned_history.txt, and trajectory_results.txt
+                        if filename in ['trajectory_results.txt', 'learned', 'learned_history.txt']:
+                            continue
+
+                        file_path = os.path.join(base, filename)
+                        try:
+                            if os.path.isfile(file_path):
+                                os.remove(file_path)
+                            elif os.path.isdir(file_path):
+                                import shutil
+                                shutil.rmtree(file_path)
+                        except OSError as e:
+                            print(f"删除失败: {file_path}, 错误: {e}")
         else:
             base = self.test_sync_dir
             if os.path.exists(base):
@@ -309,12 +324,14 @@ class CondorCollector(object):
                         actor_folders = [d for d in os.listdir(self.buffer_path)
                                          if os.path.isdir(join(self.buffer_path, d)) and d.startswith('actor_')]
 
-        print("The actor is activated, we start training!")
+        print("The actor is activated, we start collecting experience!")
+        print(f"Target: {n_steps} steps, Current: {steps} steps")
 
         while steps < n_steps:
             time.sleep(1)
             np.random.shuffle(self.ids)
-            print("buffer size:", self.buffer.size)
+            progress_pct = (steps / n_steps) * 100 if n_steps > 0 else 0
+            print(f"Buffer progress: {steps}/{n_steps} steps ({progress_pct:.1f}%) | Buffer size: {self.buffer.size}")
             for id in self.ids:
 
                 base = join(self.buffer_path, 'actor_%d' % (id))
@@ -324,12 +341,35 @@ class CondorCollector(object):
                 except:
                     traj_files = []
 
-                traj_files = [f for f in traj_files if f != 'trajectory_results.txt']
+                # Filter out non-pickle files and special files
+                traj_files = [f for f in traj_files
+                             if f.endswith('.pickle')
+                             and f != 'trajectory_results.txt'
+                             and not f.startswith('.')]
+
+                # Create learned cache directory
+                learned_dir = join(base, 'learned')
+                if not os.path.exists(learned_dir):
+                    os.makedirs(learned_dir)
+
+                # Load learned history
+                learned_history_file = join(base, 'learned_history.txt')
+                if os.path.exists(learned_history_file):
+                    with open(learned_history_file, 'r') as f:
+                        learned_set = set(line.strip() for line in f)
+                else:
+                    learned_set = set()
 
                 traj_files = self.sort_traj_name(traj_files)[:]
                 for p in traj_files:
                     try:
                         target = join(base, p)
+
+                        # Skip if already learned
+                        if p in learned_set:
+                            print(f"Skipping already learned: {p}")
+                            continue
+
                         if os.path.getsize(target) > 0:
                             if steps < n_steps:  # if reach the target steps, don't put the experinece into the buffer
                                 with open(target, 'rb') as f:
@@ -345,11 +385,25 @@ class CondorCollector(object):
                                     results.append(dict(ep_rew=ep_rew, ep_len=ep_len, ep_status=status, ep_time=ep_time, world=world, collision=collision, opt_time = opt_time, nav_metric = nav_metric))
                                     self.buffer_expand(traj)
                                     steps += ep_len
-                            os.remove(join(base, p))
+
+                                # Move to learned directory instead of deleting
+                                learned_path = join(learned_dir, p)
+                                shutil.move(target, learned_path)
+
+                                # Record in learned history
+                                with open(learned_history_file, 'a') as f:
+                                    f.write(f"{p}\n")
+                                learned_set.add(p)
+
+                                print(f"Learned and archived: {p} | Progress: {steps}/{n_steps} steps")
                     except:
                         logging.exception('')
                         print("failed to load actor_%s:%s" % (id, p))
-                        # os.remove(join(base, p))
                         pass
+
+        print(f"\n{'='*80}")
+        print(f"Collection complete! Collected {steps} steps from {len(results)} trajectories")
+        print(f"Final buffer size: {self.buffer.size}")
+        print(f"{'='*80}\n")
 
         return steps, results

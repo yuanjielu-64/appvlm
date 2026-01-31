@@ -208,9 +208,14 @@ def train(env, policy, buffer, config):
         collector = LocalCollector(policy, env, buffer, save_path)
 
     print("    >>>> Pre-collect experience")
+    print(f"    >>>> Target buffer size: {training_config['pre_collect']} steps")
 
     # collector.collect(n_steps=training_config['pre_collect'], status='test')
     collector.collect(n_steps=training_config['pre_collect'], status='train')
+
+    print(f"    >>>> Buffer filled! Current size: {buffer.size} steps")
+    print(f"    >>>> Starting policy training...")
+    print("=" * 80)
 
     n_steps = 0
     n_iter = 0
@@ -363,29 +368,65 @@ if __name__ == "__main__":
     # restart_gazebo()
 
     parser = argparse.ArgumentParser(description = 'Start training')
-    parser.add_argument('--config_path', dest='config_path', default="../configs/")
-    parser.add_argument('--config_file', dest='config_file', default="TD3_function")
+    parser.add_argument('--config_path', dest='config_path', default="../script/applr/configs/")
+    parser.add_argument('--config_file', dest='config_file', default="DDP_cluster")
     parser.add_argument('--buffer_path', dest='buffer_path', default="../buffer/")
     parser.add_argument('--logging_path', dest='logging_path', default="../logging/")
     parser.add_argument('--buffer_size', dest='buffer_size', default= 350)
     parser.add_argument('--device', dest='device', default=None)
+    parser.add_argument('--policy_name', dest='policy_name', default="ddp_heurstic_new",
+                        help='Policy name (e.g., ddp_heurstic_new). Will load checkpoint from buffer_path/policy_name if exists.')
 
     logging.getLogger().setLevel("INFO")
     args = parser.parse_args()
-    CONFIG_PATH = args.config_path + args.config_file + ".yaml"
 
     BUFFER_PATH = args.buffer_path
     BUFFER_SIZE = args.buffer_size
-
     SAVE_PATH = args.logging_path
-    print(">>>>>>>> Loading the configuration from %s" % CONFIG_PATH)
+
+    # Determine policy name
+    if args.policy_name:
+        POLICY_NAME = args.policy_name
+        print(f">>>>>>>> Using policy name: {POLICY_NAME}")
+    else:
+        # Will be set after loading config
+        POLICY_NAME = None
+
+    # Create/check buffer directory for this policy
+    if POLICY_NAME:
+        BUFFER_PATH_FULL = join(BUFFER_PATH, POLICY_NAME)
+
+        # Check if config.yaml exists in policy directory
+        policy_config_path = join(BUFFER_PATH_FULL, "config.yaml")
+        if exists(policy_config_path):
+            print(f">>>>>>>> Found existing config at {policy_config_path}")
+            print(f">>>>>>>> Loading configuration from policy directory")
+            CONFIG_PATH = policy_config_path
+        else:
+            print(f">>>>>>>> No config found in policy directory")
+            print(f">>>>>>>> Using default config from {args.config_path + args.config_file + '.yaml'}")
+            CONFIG_PATH = args.config_path + args.config_file + ".yaml"
+    else:
+        CONFIG_PATH = args.config_path + args.config_file + ".yaml"
+
+    print(f">>>>>>>> Loading the configuration from {CONFIG_PATH}")
     config = initialize_config(CONFIG_PATH, SAVE_PATH)
     ACTION_TYPE = config["env_config"]["action_type"]
 
-    if (os.path.exists(BUFFER_PATH + ACTION_TYPE) == False):
-        os.mkdir(BUFFER_PATH + ACTION_TYPE)
+    # Set POLICY_NAME if not specified
+    if not POLICY_NAME:
+        POLICY_NAME = ACTION_TYPE
+        print(f">>>>>>>> Using default policy name (ACTION_TYPE): {POLICY_NAME}")
 
-    BUFFER_PATH = BUFFER_PATH + ACTION_TYPE
+    # Create buffer directory for this policy
+    BUFFER_PATH_FULL = join(BUFFER_PATH, POLICY_NAME)
+    if not exists(BUFFER_PATH_FULL):
+        os.makedirs(BUFFER_PATH_FULL)
+        print(f">>>>>>>> Created buffer directory: {BUFFER_PATH_FULL}")
+    else:
+        print(f">>>>>>>> Buffer directory exists: {BUFFER_PATH_FULL}")
+
+    BUFFER_PATH = BUFFER_PATH_FULL
 
     seed(config)
     print(">>>>>>>> Creating the environments")
@@ -394,5 +435,21 @@ if __name__ == "__main__":
 
     print(">>>>>>>> Initializing the policy")
     policy, buffer = initialize_policy(config, env)
+
+    # Load checkpoint if exists in buffer_path/policy_name
+    checkpoint_path = join(BUFFER_PATH, "policy_actor")
+    if exists(checkpoint_path):
+        print(f">>>>>>>> Found checkpoint at {BUFFER_PATH}")
+        print(f">>>>>>>> Loading checkpoint from {checkpoint_path}")
+        try:
+            policy.load(BUFFER_PATH, "policy")
+            print(">>>>>>>> Successfully loaded checkpoint!")
+        except Exception as e:
+            print(f">>>>>>>> Warning: Failed to load checkpoint: {e}")
+            print(">>>>>>>> Starting from scratch...")
+    else:
+        print(f">>>>>>>> No checkpoint found at {checkpoint_path}")
+        print(">>>>>>>> Starting training from scratch...")
+
     print(">>>>>>>> Start training")
     train(train_envs, policy, buffer, config)
